@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Mini Militia</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #ui-container {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        pointer-events: none;
+      }
+      #health-bar {
+        width: 200px;
+        height: 20px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 5px;
+      }
+      #health-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #ff00ff;
+        transition: width 0.3s;
+      }
+      #ammo-bar {
+        width: 200px;
+        height: 10px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+      #ammo-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #0066ff;
+        transition: width 0.3s;
+      }
+      #jetpack-bar {
+        width: 200px;
+        height: 10px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 5px;
+      }
+      #jetpack-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #ffcc00;
+        transition: width 0.3s;
+      }
+      #weapon-info {
+        margin-top: 10px;
+      }
+      #mobile-controls {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        pointer-events: all;
+        z-index: 10;
+      }
+      .joystick-area {
+        width: 150px;
+        height: 150px;
+        background-color: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        position: relative;
+        margin: 0 20px;
+        touch-action: none;
+      }
+      .joystick-knob {
+        width: 50px;
+        height: 50px;
+        background-color: rgba(255, 255, 255, 0.5);
+        border-radius: 50%;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        touch-action: none;
+      }
+      .action-buttons {
+        display: flex;
+        flex-direction: column;
+        margin-right: 20px;
+      }
+      .action-button {
+        width: 60px;
+        height: 60px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        margin: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        touch-action: none;
+      }
+      #loading-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        z-index: 100;
+      }
+      #loading-bar {
+        width: 300px;
+        height: 20px;
+        background-color: #333;
+        border-radius: 10px;
+        margin-top: 20px;
+        overflow: hidden;
+      }
+      #loading-progress {
+        height: 100%;
+        width: 0%;
+        background-color: #ff00ff;
+        transition: width 0.3s;
+      }
+      #loading-message {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #aaa;
+      }
+      #error-message {
+        color: #ff6666;
+        margin-top: 10px;
+        display: none;
+      }
+      #start-button {
+        margin-top: 20px;
+        padding: 15px 30px;
+        background-color: #ff00ff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 20px;
+        display: block;
+      }
+      #start-button:hover {
+        background-color: #cc00cc;
+      }
+      #debug-info {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        max-width: 300px;
+        z-index: 50;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-screen">
+      <h1>3D Mini Militia</h1>
+      <p>Loading game assets...</p>
+      <div id="loading-bar">
+        <div id="loading-progress"></div>
+      </div>
+      <div id="loading-message">Initializing game engine...</div>
+      <div id="error-message"></div>
+      <button id="start-button">START GAME</button>
+    </div>
+
+    <div id="ui-container">
+      <div id="health-bar">
+        <div id="health-fill"></div>
+      </div>
+      <div id="ammo-bar">
+        <div id="ammo-fill"></div>
+      </div>
+      <div id="jetpack-bar">
+        <div id="jetpack-fill"></div>
+      </div>
+      <div id="weapon-info">Assault Rifle: 30/90</div>
+    </div>
+
+    <div id="debug-info">
+      Status: Waiting to start<br />
+      Controls: Not initialized
+    </div>
+
+    <div id="mobile-controls">
+      <div class="joystick-area" id="move-joystick">
+        <div class="joystick-knob"></div>
+      </div>
+      <div class="action-buttons">
+        <div class="action-button" id="jump-button">JUMP</div>
+        <div class="action-button" id="fire-button">FIRE</div>
+        <div class="action-button" id="reload-button">RELOAD</div>
+      </div>
+      <div class="joystick-area" id="look-joystick">
+        <div class="joystick-knob"></div>
+      </div>
+    </div>
+
+    <!-- Direct script includes -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <script>
+      // Global variables
+      let gameStarted = false;
+      let loadingComplete = false;
+      let debugInfo = document.getElementById("debug-info");
+
+      // Debug function
+      function updateDebug(message) {
+        if (debugInfo) {
+          debugInfo.innerHTML += "<br>" + message;
+          // Keep only last 10 messages
+          const lines = debugInfo.innerHTML.split("<br>");
+          if (lines.length > 10) {
+            debugInfo.innerHTML = lines.slice(lines.length - 10).join("<br>");
+          }
+        }
+        console.log("[DEBUG] " + message);
+      }
+
+      // Fallback for Ammo.js
+      window.Ammo = function () {
+        return new Promise((resolve) => {
+          updateDebug("Using fallback Ammo.js implementation");
+
+          // Create mock Ammo objects
+          const mockAmmo = {
+            btVector3: function (x, y, z) {
+              this.x = x || 0;
+              this.y = y || 0;
+              this.z = z || 0;
+            },
+            btQuaternion: function (x, y, z, w) {
+              this.x = x || 0;
+              this.y = y || 0;
+              this.z = z || 0;
+              this.w = w || 1;
+            },
+            btTransform: function () {
+              this.setIdentity = function () {};
+              this.setOrigin = function () {};
+              this.setRotation = function () {};
+              this.getOrigin = function () {
+                return new mockAmmo.btVector3();
+              };
+              this.getRotation = function () {
+                return new mockAmmo.btQuaternion();
+              };
+            },
+            btDefaultMotionState: function () {
+              this.getWorldTransform = function () {};
+              this.setWorldTransform = function () {};
+            },
+            btRigidBodyConstructionInfo: function () {},
+            btRigidBody: function () {
+              this.setFriction = function () {};
+              this.setRestitution = function () {};
+              this.setActivationState = function () {};
+              this.setCollisionFlags = function () {};
+              this.getMotionState = function () {
+                return { setWorldTransform: function () {} };
+              };
+            },
+            btCapsuleShape: function () {
+              this.calculateLocalInertia = function () {};
+            },
+          };
+
+          // Mock AmmoPhysics
+          window.AmmoPhysics = function () {
+            return {
+              addMesh: function () {
+                return {
+                  userData: { physicsBody: { setFriction: function () {} } },
+                };
+              },
+              addRigidBody: function () {},
+              removeRigidBody: function () {},
+              update: function () {},
+              debug: { enable: function () {} },
+            };
+          };
+
+          resolve(mockAmmo);
+        });
+      };
+
+      // Function to start the game
+      function startGame() {
+        if (gameStarted) return;
+        gameStarted = true;
+
+        try {
+          updateDebug("Starting game...");
+
+          // Hide loading screen
+          document.getElementById("loading-screen").style.display = "none";
+
+          // Show debug info
+          if (debugInfo) debugInfo.style.display = "block";
+
+          // Create game instance if it doesn't exist
+          if (!window.game) {
+            updateDebug("Creating new Game instance");
+
+            // Load game scripts directly
+            loadGameScripts()
+              .then(() => {
+                if (window.Game) {
+                  window.game = new Game();
+                  updateDebug("Game instance created");
+                } else {
+                  throw new Error("Game class not available");
+                }
+              })
+              .catch((error) => {
+                updateDebug("Error loading game scripts: " + error.message);
+                showError("Failed to load game scripts: " + error.message);
+              });
+          }
+        } catch (error) {
+          updateDebug("Error starting game: " + error.message);
+          showError("Failed to start game: " + error.message);
+        }
+      }
+
+      // Function to show error
+      function showError(message) {
+        const errorElement = document.getElementById("error-message");
+        if (errorElement) {
+          errorElement.style.display = "block";
+          errorElement.textContent = message;
+        }
+
+        // Show loading screen with error
+        document.getElementById("loading-screen").style.display = "flex";
+      }
+
+      // Function to load game scripts
+      async function loadGameScripts() {
+        updateDebug("Loading game scripts...");
+
+        const scripts = [
+          { src: "js/game.js", id: "game" },
+          { src: "js/player.js", id: "player" },
+          { src: "js/weapons.js", id: "weapons" },
+          { src: "js/map.js", id: "map" },
+          { src: "js/controls.js", id: "controls" },
+          { src: "js/network.js", id: "network" },
+        ];
+
+        // Load scripts sequentially
+        for (const script of scripts) {
+          try {
+            await loadScript(script.src, script.id);
+            updateDebug(`Loaded ${script.id}`);
+          } catch (error) {
+            updateDebug(`Error loading ${script.id}: ${error.message}`);
+            // Continue loading other scripts
+          }
+        }
+      }
+
+      // Function to load a script
+      function loadScript(src, id) {
+        return new Promise((resolve, reject) => {
+          const existingScript = document.getElementById(id);
+          if (existingScript) {
+            resolve();
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = src;
+          script.id = id;
+
+          script.onload = () => {
+            updateDebug(`Script ${id} loaded successfully`);
+            resolve();
+          };
+
+          script.onerror = (error) => {
+            updateDebug(`Error loading script ${id}`);
+            reject(new Error(`Failed to load ${id}`));
+          };
+
+          document.body.appendChild(script);
+        });
+      }
+
+      // Set up start button
+      document
+        .getElementById("start-button")
+        .addEventListener("click", function (e) {
+          e.preventDefault();
+          updateDebug("Start button clicked");
+          startGame();
+        });
+
+      // Initialize mobile controls directly
+      function initDirectMobileControls() {
+        updateDebug("Initializing direct mobile controls");
+
+        const jumpButton = document.getElementById("jump-button");
+        const fireButton = document.getElementById("fire-button");
+        const reloadButton = document.getElementById("reload-button");
+        const moveJoystick = document.getElementById("move-joystick");
+        const lookJoystick = document.getElementById("look-joystick");
+
+        if (jumpButton) {
+          jumpButton.addEventListener("touchstart", function (e) {
+            e.preventDefault();
+            updateDebug("Jump button pressed");
+            if (
+              window.game &&
+              window.game.players &&
+              window.game.localPlayerId
+            ) {
+              const player = window.game.players[window.game.localPlayerId];
+              if (player) {
+                if (player.isOnGround) {
+                  player.jump();
+                } else {
+                  player.startJetpack();
+                }
+              }
+            }
+          });
+
+          jumpButton.addEventListener("touchend", function (e) {
+            e.preventDefault();
+            updateDebug("Jump button released");
+            if (
+              window.game &&
+              window.game.players &&
+              window.game.localPlayerId
+            ) {
+              const player = window.game.players[window.game.localPlayerId];
+              if (player) {
+                player.stopJetpack();
+              }
+            }
+          });
+        }
+
+        if (fireButton) {
+          fireButton.addEventListener("touchstart", function (e) {
+            e.preventDefault();
+            updateDebug("Fire button pressed");
+            if (
+              window.game &&
+              window.game.players &&
+              window.game.localPlayerId
+            ) {
+              const player = window.game.players[window.game.localPlayerId];
+              if (player) {
+                player.shoot();
+              }
+            }
+          });
+
+          fireButton.addEventListener("touchend", function (e) {
+            e.preventDefault();
+            updateDebug("Fire button released");
+            if (
+              window.game &&
+              window.game.players &&
+              window.game.localPlayerId
+            ) {
+              const player = window.game.players[window.game.localPlayerId];
+              if (player) {
+                player.stopShooting();
+              }
+            }
+          });
+        }
+
+        if (reloadButton) {
+          reloadButton.addEventListener("touchstart", function (e) {
+            e.preventDefault();
+            updateDebug("Reload button pressed");
+            if (
+              window.game &&
+              window.game.players &&
+              window.game.localPlayerId
+            ) {
+              const player = window.game.players[window.game.localPlayerId];
+              if (player) {
+                player.reload();
+              }
+            }
+          });
+        }
+
+        // Simple joystick implementation
+        if (moveJoystick) {
+          setupSimpleJoystick(moveJoystick, "move");
+        }
+
+        if (lookJoystick) {
+          setupSimpleJoystick(lookJoystick, "look");
+        }
+      }
+
+      function setupSimpleJoystick(joystickElement, type) {
+        const knob = joystickElement.querySelector(".joystick-knob");
+        if (!knob) return;
+
+        let active = false;
+        let startX, startY;
+        let currentX, currentY;
+
+        joystickElement.addEventListener("touchstart", function (e) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          active = true;
+
+          const rect = joystickElement.getBoundingClientRect();
+          startX = rect.left + rect.width / 2;
+          startY = rect.top + rect.height / 2;
+
+          updateJoystickPosition(touch.clientX, touch.clientY);
+        });
+
+        joystickElement.addEventListener("touchmove", function (e) {
+          e.preventDefault();
+          if (!active) return;
+
+          const touch = e.touches[0];
+          updateJoystickPosition(touch.clientX, touch.clientY);
+        });
+
+        joystickElement.addEventListener("touchend", function (e) {
+          e.preventDefault();
+          active = false;
+          knob.style.transform = "translate(-50%, -50%)";
+
+          // Reset joystick values
+          if (type === "move") {
+            moveJoystickValue = { x: 0, y: 0 };
+          } else {
+            lookJoystickValue = { x: 0, y: 0 };
+          }
+        });
+
+        function updateJoystickPosition(clientX, clientY) {
+          const rect = joystickElement.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+
+          // Calculate distance from center
+          let dx = clientX - centerX;
+          let dy = clientY - centerY;
+
+          // Calculate distance
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const maxDistance = rect.width / 2 - knob.offsetWidth / 2;
+
+          // Normalize if distance is greater than max
+          if (distance > maxDistance) {
+            dx = (dx * maxDistance) / distance;
+            dy = (dy * maxDistance) / distance;
+          }
+
+          // Update knob position
+          knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+          // Update joystick values (normalized between -1 and 1)
+          const valueX = dx / maxDistance;
+          const valueY = dy / maxDistance;
+
+          if (type === "move") {
+            moveJoystickValue = { x: valueX, y: valueY };
+          } else {
+            lookJoystickValue = { x: valueX, y: valueY };
+          }
+        }
+      }
+
+      // Joystick values
+      let moveJoystickValue = { x: 0, y: 0 };
+      let lookJoystickValue = { x: 0, y: 0 };
+
+      // Update loop for direct controls
+      function updateDirectControls() {
+        if (!window.game || !window.game.players || !window.game.localPlayerId)
+          return;
+
+        const player = window.game.players[window.game.localPlayerId];
+        if (!player) return;
+
+        // Apply movement from joystick
+        if (
+          Math.abs(moveJoystickValue.x) > 0.1 ||
+          Math.abs(moveJoystickValue.y) > 0.1
+        ) {
+          const moveDirection = new THREE.Vector3(
+            moveJoystickValue.x,
+            0,
+            moveJoystickValue.y
+          );
+
+          // Adjust movement direction based on camera rotation
+          if (player.headMesh) {
+            const rotationY = player.headMesh.rotation.y;
+            const sin = Math.sin(rotationY);
+            const cos = Math.cos(rotationY);
+
+            const moveX = moveDirection.x * cos - moveDirection.z * sin;
+            const moveZ = moveDirection.x * sin + moveDirection.z * cos;
+
+            moveDirection.x = moveX;
+            moveDirection.z = moveZ;
+          }
+
+          player.move(moveDirection);
+        }
+
+        // Apply camera rotation from joystick
+        if (
+          Math.abs(lookJoystickValue.x) > 0.1 ||
+          Math.abs(lookJoystickValue.y) > 0.1
+        ) {
+          if (player.headMesh) {
+            player.headMesh.rotation.y -= lookJoystickValue.x * 0.05;
+          }
+
+          if (window.game.camera) {
+            const verticalLook =
+              window.game.camera.rotation.x + lookJoystickValue.y * 0.05;
+            window.game.camera.rotation.x = Math.max(
+              -Math.PI / 2,
+              Math.min(Math.PI / 2, verticalLook)
+            );
+          }
+        }
+
+        requestAnimationFrame(updateDirectControls);
+      }
+
+      // Initialize direct controls
+      initDirectMobileControls();
+
+      // Start direct controls update loop
+      updateDirectControls();
+
+      // Show loading progress
+      document.getElementById("loading-progress").style.width = "100%";
+
+      // Auto-start after a delay
+      setTimeout(function () {
+        if (!gameStarted) {
+          updateDebug("Auto-starting game after delay");
+          startGame();
+        }
+      }, 2000);
+    </script>
+  </body>
+</html>

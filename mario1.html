@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ultra Super Mario 3D</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: "Arial", sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #ui-container {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        background-color: rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+      }
+      #mission-container {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        text-align: center;
+        color: white;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+      }
+      #mission-title {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      #mission-description {
+        font-size: 18px;
+      }
+      #game-over {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        display: none;
+      }
+      #game-over button {
+        padding: 10px 20px;
+        margin-top: 20px;
+        background-color: #ff0000;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      #level-complete {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        display: none;
+      }
+      #level-complete button {
+        padding: 10px 20px;
+        margin-top: 20px;
+        background-color: #00aa00;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      #power-up-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        color: white;
+        border-radius: 5px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-container">
+      <div id="score">Coins: 0</div>
+      <div id="lives">Lives: 3</div>
+      <div id="time">Time: 300</div>
+    </div>
+    <div id="mission-container">
+      <div id="mission-title">Mission: The Lost Kingdom</div>
+      <div id="mission-description">
+        Collect all Star Pieces and defeat Bowser to save the kingdom!
+      </div>
+    </div>
+    <div id="power-up-indicator">Power-up: None</div>
+    <div id="game-over">
+      <h2>Game Over!</h2>
+      <p>You ran out of lives.</p>
+      <button id="restart-button">Try Again</button>
+    </div>
+    <div id="level-complete">
+      <h2>Level Complete!</h2>
+      <p>You saved the kingdom!</p>
+      <p id="level-stats"></p>
+      <button id="next-level-button">Next Level</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      // Game variables
+      let scene, camera, renderer, mario;
+      let platforms = [],
+        coins = [],
+        enemies = [],
+        powerUps = [],
+        starPieces = [],
+        obstacles = [];
+      let gravity = 0.015,
+        jumpForce = 0.4;
+      let velocity = { x: 0, y: 0, z: 0 };
+      let keysPressed = {};
+      let isJumping = false,
+        canDoubleJump = false;
+      let coinCount = 0,
+        lives = 3,
+        timeRemaining = 300;
+      let gameOver = false,
+        levelComplete = false;
+      let currentLevel = 1;
+      let currentPowerUp = "none";
+      let powerUpTimer = 0;
+      let invincible = false,
+        invincibilityTimer = 0;
+      let starPiecesCollected = 0,
+        totalStarPieces = 0;
+      let bowser,
+        bowserHealth = 3,
+        bowserDefeated = false;
+      let fireballCooldown = 0,
+        canShootFireball = false;
+      let fireballs = [];
+      let particleEffects = [];
+
+      // Mission states
+      const MISSION_STATES = {
+        COLLECT_COINS: "Collect 20 coins to unlock the castle",
+        STAR_PIECES: "Find all 5 Star Pieces hidden in the kingdom",
+        DEFEAT_BOWSER: "Defeat Bowser to save the kingdom!",
+        COMPLETE: "Victory! You saved the Mushroom Kingdom!",
+      };
+      let currentMissionState = MISSION_STATES.COLLECT_COINS;
+      let castleUnlocked = false;
+
+      // Setup the game
+      function init() {
+        setupScene();
+        setupLighting();
+        createMario();
+        createLevel(currentLevel);
+        setupEventListeners();
+        animate();
+      }
+
+      function setupScene() {
+        // Create scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+        scene.fog = new THREE.Fog(0x87ceeb, 30, 100);
+
+        // Create camera
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Create renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+      }
+
+      function setupLighting() {
+        // Ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // Directional light (sun)
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(20, 40, 20);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 200;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+      }
+
+      function createMario() {
+        // Mario's body group
+        mario = new THREE.Group();
+
+        // Mario's body
+        const bodyGeometry = new THREE.BoxGeometry(0.8, 1.2, 0.6);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff0000,
+        }); // Red
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.6;
+        body.castShadow = true;
+
+        // Mario's head
+        const headGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+        const headMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffa07a,
+        }); // Light salmon
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.y = 1.5;
+        head.castShadow = true;
+
+        // Mario's cap
+        const capGeometry = new THREE.CylinderGeometry(0.45, 0.42, 0.2, 32);
+        const capMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red
+        const cap = new THREE.Mesh(capGeometry, capMaterial);
+        cap.position.y = 1.8;
+        cap.castShadow = true;
+
+        // Mario's eyes
+        const eyeGeometry = new THREE.SphereGeometry(0.07, 16, 16);
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        leftEye.position.set(0.15, 1.55, 0.35);
+        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        rightEye.position.set(-0.15, 1.55, 0.35);
+
+        // Mario's mustache
+        const mustacheGeometry = new THREE.BoxGeometry(0.5, 0.1, 0.1);
+        const mustacheMaterial = new THREE.MeshBasicMaterial({
+          color: 0x000000,
+        });
+        const mustache = new THREE.Mesh(mustacheGeometry, mustacheMaterial);
+        mustache.position.set(0, 1.35, 0.35);
+
+        // Mario's arms
+        const armGeometry = new THREE.BoxGeometry(0.2, 0.6, 0.2);
+        const armMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+        leftArm.position.set(0.5, 0.8, 0);
+        leftArm.castShadow = true;
+        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+        rightArm.position.set(-0.5, 0.8, 0);
+        rightArm.castShadow = true;
+
+        // Mario's legs
+        const legGeometry = new THREE.BoxGeometry(0.25, 0.6, 0.25);
+        const legMaterial = new THREE.MeshStandardMaterial({ color: 0x0000ff }); // Blue
+        const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+        leftLeg.position.set(0.2, 0.1, 0);
+        leftLeg.castShadow = true;
+        const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+        rightLeg.position.set(-0.2, 0.1, 0);
+        rightLeg.castShadow = true;
+
+        // Add all parts to Mario group
+        mario.add(body);
+        mario.add(head);
+        mario.add(cap);
+        mario.add(leftEye);
+        mario.add(rightEye);
+        mario.add(mustache);
+        mario.add(leftArm);
+        mario.add(rightArm);
+        mario.add(leftLeg);
+        mario.add(rightLeg);
+
+        // Set initial position
+        mario.position.set(0, 1, 0);
+
+        // Add to scene
+        scene.add(mario);
+
+        // Store a reference to Mario's parts for animations
+        mario.parts = {
+          body,
+          head,
+          cap,
+          leftEye,
+          rightEye,
+          mustache,
+          leftArm,
+          rightArm,
+          leftLeg,
+          rightLeg,
+        };
+      }
+
+      function createLevel(level) {
+        // Clear previous level elements
+        platforms.forEach((p) => scene.remove(p.mesh));
+        coins.forEach((c) => scene.remove(c.mesh));
+        enemies.forEach((e) => scene.remove(e.mesh));
+        powerUps.forEach((p) => scene.remove(p.mesh));
+        starPieces.forEach((s) => scene.remove(s.mesh));
+        obstacles.forEach((o) => scene.remove(o.mesh));
+        if (bowser) scene.remove(bowser);
+
+        platforms = [];
+        coins = [];
+        enemies = [];
+        powerUps = [];
+        starPieces = [];
+        obstacles = [];
+        fireballs = [];
+
+        // Reset state
+        coinCount = 0;
+        timeRemaining = 300;
+        starPiecesCollected = 0;
+        bowserDefeated = false;
+        castleUnlocked = false;
+        currentMissionState = MISSION_STATES.COLLECT_COINS;
+        updateMissionDisplay();
+
+        // Initialize level structure
+        if (level === 1) {
+          createLevel1();
+        } else if (level === 2) {
+          createLevel2();
+        }
+
+        // Reset mario position
+        mario.position.set(0, 2, 0);
+        velocity = { x: 0, y: 0, z: 0 };
+      }
+
+      function createLevel1() {
+        // Create main ground
+        createGround(0, -0.5, 0, 100, 1, 100, 0x8b4513);
+
+        // Create platforms
+        const platformPositions = [
+          { x: 8, y: 2, z: -10, width: 4, depth: 4 },
+          { x: -10, y: 3, z: -8, width: 3, depth: 3 },
+          { x: 5, y: 4, z: 10, width: 5, depth: 3 },
+          { x: -7, y: 5, z: 12, width: 4, depth: 4 },
+          { x: 0, y: 6, z: -15, width: 3, depth: 3 },
+          { x: 15, y: 4, z: 0, width: 4, depth: 4 },
+          { x: -15, y: 3, z: 5, width: 3, depth: 5 },
+          { x: 12, y: 7, z: -12, width: 3, depth: 3 },
+          { x: -12, y: 8, z: -5, width: 3, depth: 3 },
+        ];
+
+        platformPositions.forEach((pos) => {
+          createPlatform(pos.x, pos.y, pos.z, pos.width, 0.5, pos.depth);
+        });
+
+        // Create coins
+        createCoinsOnPlatforms();
+        createRandomCoins(30);
+
+        // Create enemies
+        createEnemy(-5, 0.5, -10, "goomba");
+        createEnemy(10, 0.5, 10, "goomba");
+        createEnemy(-8, 3.5, -8, "goomba");
+        createEnemy(5, 4.5, 10, "koopa");
+        createEnemy(15, 4.5, 0, "koopa");
+
+        // Create power-ups
+        createPowerUp(8, 3, -10, "mushroom");
+        createPowerUp(-10, 4, -8, "fireFlower");
+        createPowerUp(0, 7, -15, "star");
+
+        // Create star pieces
+        createStarPiece(12, 8, -12);
+        createStarPiece(-12, 9, -5);
+        createStarPiece(15, 5, 0);
+        createStarPiece(-7, 6, 12);
+        createStarPiece(0, 7, -15);
+
+        totalStarPieces = starPieces.length;
+
+        // Create castle
+        createCastle(0, 0, -30);
+
+        // Add some obstacles
+        createObstacle(3, 0.5, 5, "pipe");
+        createObstacle(-3, 0.5, -5, "pipe");
+        createObstacle(10, 0.5, -5, "thwomp");
+        createObstacle(-10, 0.5, 8, "thwomp");
+
+        // Add decorative elements
+        createTree(20, 0, 20);
+        createTree(-20, 0, -20);
+        createTree(20, 0, -20);
+        createTree(-20, 0, 20);
+        createCloud(10, 15, -10);
+        createCloud(-10, 18, 10);
+        createCloud(15, 20, 15);
+        createCloud(-15, 17, -15);
+
+        // Background mountains
+        createMountain(40, 0, -40, 25, 30);
+        createMountain(-40, 0, -40, 20, 25);
+        createMountain(30, 0, 50, 30, 35);
+        createMountain(-50, 0, 30, 25, 30);
+      }
+
+      function createLevel2() {
+        // Create main ground
+        createGround(0, -0.5, 0, 120, 1, 120, 0x556b2f); // Darker green for level 2
+
+        // Create lava pools
+        createLava(10, -0.2, 0, 20, 0.3, 10);
+        createLava(-15, -0.2, -20, 15, 0.3, 15);
+        createLava(20, -0.2, -20, 10, 0.3, 10);
+
+        // Create platforms (more challenging layout)
+        const platformPositions = [
+          { x: 0, y: 3, z: -15, width: 4, depth: 4 },
+          { x: 10, y: 5, z: -10, width: 3, depth: 3 },
+          { x: 20, y: 7, z: -5, width: 5, depth: 3 },
+          { x: 20, y: 9, z: 10, width: 4, depth: 4 },
+          { x: 10, y: 11, z: 20, width: 3, depth: 3 },
+          { x: 0, y: 13, z: 25, width: 4, depth: 4 },
+          { x: -10, y: 15, z: 20, width: 3, depth: 5 },
+          { x: -20, y: 17, z: 10, width: 3, depth: 3 },
+          { x: -25, y: 19, z: 0, width: 5, depth: 5 },
+          { x: -20, y: 21, z: -10, width: 3, depth: 3 },
+        ];
+
+        platformPositions.forEach((pos) => {
+          createPlatform(
+            pos.x,
+            pos.y,
+            pos.z,
+            pos.width,
+            0.5,
+            pos.depth,
+            0x8b0000
+          ); // Darker platforms
+        });
+
+        // Create additional floating platforms with moving patterns
+        createMovingPlatform(5, 8, 5, 4, 0.5, 4, "horizontal", 10, 3);
+        createMovingPlatform(-5, 12, -5, 4, 0.5, 4, "vertical", 10, 3);
+        createMovingPlatform(15, 16, -15, 4, 0.5, 4, "circular", 8, 4);
+
+        // Create coins
+        createCoinsOnPlatforms();
+        createRandomCoins(40);
+
+        // Create enemies (more and tougher)
+        createEnemy(0, 3.5, -15, "goomba");
+        createEnemy(10, 5.5, -10, "koopa");
+        createEnemy(20, 7.5, -5, "bulletBill");
+        createEnemy(20, 9.5, 10, "koopa");
+        createEnemy(10, 11.5, 20, "goomba");
+        createEnemy(0, 13.5, 25, "bulletBill");
+        createEnemy(-10, 15.5, 20, "koopa");
+        createEnemy(-20, 17.5, 10, "bulletBill");
+
+        // Create power-ups
+        createPowerUp(0, 4, -15, "mushroom");
+        createPowerUp(20, 8, -5, "fireFlower");
+        createPowerUp(10, 12, 20, "star");
+        createPowerUp(-20, 18, 10, "oneUp");
+
+        // Create star pieces
+        createStarPiece(20, 10, 10);
+        createStarPiece(0, 14, 25);
+        createStarPiece(-20, 18, 10);
+        createStarPiece(-25, 20, 0);
+        createStarPiece(5, 9, 5);
+
+        totalStarPieces = starPieces.length;
+
+        // Create obstacles
+        createObstacle(5, 3.5, -15, "thwomp");
+        createObstacle(15, 5.5, -10, "pipe");
+        createObstacle(-5, 15.5, 20, "thwomp");
+        createObstacle(-15, 17.5, 10, "pipe");
+
+        // Create Bowser's castle
+        createBowserCastle(-25, 0, -30);
+
+        // Create Bowser
+        createBowser(-25, 22, -10);
+
+        // Create decorative elements
+        createTree(40, 0, 40, 0xff5555); // Red trees for level 2
+        createTree(-40, 0, -40, 0xff5555);
+        createTree(40, 0, -40, 0xff5555);
+        createTree(-40, 0, 40, 0xff5555);
+        createCloud(10, 25, -10, 0xdddddd);
+        createCloud(-10, 28, 10, 0xdddddd);
+        createCloud(15, 30, 15, 0xdddddd);
+
+        // Background volcanoes
+        createVolcano(60, 0, -60, 30, 40);
+        createVolcano(-60, 0, 60, 25, 35);
+      }
+
+      function createGround(x, y, z, width, height, depth, color = 0x8b4513) {
+        const groundGeometry = new THREE.BoxGeometry(width, height, depth);
+        const groundTexture = createTexture(color);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+          map: groundTexture,
+          roughness: 0.8,
+        });
+
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.position.set(x, y, z);
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        platforms.push({
+          mesh: ground,
+          width: width,
+          height: height,
+          depth: depth,
+          position: { x, y, z },
+          type: "ground",
+        });
+
+        return ground;
+      }
+
+      function createTexture(baseColor) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const context = canvas.getContext("2d");
+
+        // Fill with base color
+        context.fillStyle = "#" + new THREE.Color(baseColor).getHexString();
+        context.fillRect(0, 0, 256, 256);
+
+        // Add some texture/noise
+        for (let i = 0; i < 5000; i++) {
+          const x = Math.random() * 256;
+          const y = Math.random() * 256;
+          const size = Math.random() * 3;
+          const shade = Math.random() * 60 - 30; // Darker or lighter
+
+          context.fillStyle = `rgba(${shade}, ${shade}, ${shade}, 0.1)`;
+          context.fillRect(x, y, size, size);
+        }
+
+        // Create grid pattern for blocks
+        if (baseColor !== 0x8b4513 && baseColor !== 0x556b2f) {
+          context.strokeStyle = "rgba(0, 0, 0, 0.2)";
+          context.lineWidth = 2;
+          for (let i = 0; i < 256; i += 64) {
+            context.beginPath();
+            context.moveTo(i, 0);
+            context.lineTo(i, 256);
+            context.stroke();
+
+            context.beginPath();
+            context.moveTo(0, i);
+            context.lineTo(256, i);
+            context.stroke();
+          }
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 1);
+
+        return texture;
+      }
+
+      function createPlatform(x, y, z, width, height, depth, color = 0x228b22) {
+        const platformGeometry = new THREE.BoxGeometry(width, height, depth);
+        const platformTexture = createTexture(color);
+        const platformMaterial = new THREE.MeshStandardMaterial({
+          map: platformTexture,
+          roughness: 0.7,
+        });
+
+        const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+        platform.position.set(x, y, z);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        scene.add(platform);
+
+        platforms.push({
+          mesh: platform,
+          width: width,
+          height: height,
+          depth: depth,
+          position: { x, y, z },
+          type: "platform",
+        });
+
+        return platform;
+      }
+
+      function createMovingPlatform(
+        x,
+        y,
+        z,
+        width,
+        height,
+        depth,
+        movementType,
+        range,
+        speed
+      ) {
+        const platform = createPlatform(
+          x,
+          y,
+          z,
+          width,
+          height,
+          depth,
+          0xffd700
+        ); // Gold color for moving platforms
+
+        const platformObj = platforms[platforms.length - 1];
+        platformObj.movementType = movementType;
+        platformObj.movementRange = range;
+        platformObj.movementSpeed = speed;
+        platformObj.initialPosition = { x, y, z };
+        platformObj.movementOffset = 0;
+        platformObj.type = "movingPlatform";
+
+        return platform;
+      }
+
+      function createCoinsOnPlatforms() {
+        platforms.forEach((platform) => {
+          if (
+            platform.type === "platform" ||
+            platform.type === "movingPlatform"
+          ) {
+            // Create 1-3 coins on each platform
+            const coinCount = Math.floor(Math.random() * 3) + 1;
+
+            for (let i = 0; i < coinCount; i++) {
+              const offsetX = (Math.random() - 0.5) * (platform.width * 0.6);
+              const offsetZ = (Math.random() - 0.5) * (platform.depth * 0.6);
+
+              createCoin(
+                platform.position.x + offsetX,
+                platform.position.y + platform.height / 2 + 0.5,
+                platform.position.z + offsetZ
+              );
+            }
+          }
+        });
+      }
+
+      function createRandomCoins(count) {
+        for (let i = 0; i < count; i++) {
+          const x = (Math.random() - 0.5) * 80;
+          const z = (Math.random() - 0.5) * 80;
+          const y = Math.random() * 10 + 5; // Floating coins at various heights
+
+          createCoin(x, y, z);
+        }
+      }
+
+      function createCoin(x, y, z) {
+        const coinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.05, 32);
+        const coinMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffd700,
+          metalness: 0.7,
+          roughness: 0.3,
+          emissive: 0xffd700,
+          emissiveIntensity: 0.2,
+        });
+
+        const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+        coin.rotation.x = Math.PI / 2; // Make it flat/horizontal
+        coin.position.set(x, y, z);
+        coin.castShadow = true;
+        scene.add(coin);
+
+        coins.push({
+          mesh: coin,
+          position: { x, y, z },
+          collected: false,
+          rotationSpeed: Math.random() * 0.05 + 0.02,
+        });
+
+        return coin;
+      }
+
+      function createEnemy(x, y, z, type) {
+        let enemyMesh;
+        let speed = Math.random() * 0.03 + 0.02;
+        let movementRange = Math.random() * 5 + 3;
+        let health = 1;
+
+        if (type === "goomba") {
+          // Goomba
+          enemyMesh = new THREE.Group();
+
+          // Goomba body
+          const bodyGeometry = new THREE.SphereGeometry(0.5, 32, 16);
+          const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+          });
+          const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+          body.scale.y = 0.6;
+          body.castShadow = true;
+
+          // Goomba feet
+          const footGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.3);
+          const footMaterial = new THREE.MeshStandardMaterial({
+            color: 0x000000,
+          });
+
+          const leftFoot = new THREE.Mesh(footGeometry, footMaterial);
+          leftFoot.position.set(-0.2, -0.3, 0);
+          leftFoot.castShadow = true;
+
+          const rightFoot = new THREE.Mesh(footGeometry, footMaterial);
+          rightFoot.position.set(0.2, -0.3, 0);
+          rightFoot.castShadow = true;
+
+          // Goomba eyes
+          const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+          const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+          const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          leftEye.position.set(-0.2, 0.1, 0.4);
+          const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          rightEye.position.set(0.2, 0.1, 0.4);
+
+          // Add all parts to Goomba
+          enemyMesh.add(body);
+          enemyMesh.add(leftFoot);
+          enemyMesh.add(rightFoot);
+          enemyMesh.add(leftEye);
+          enemyMesh.add(rightEye);
+        } else if (type === "koopa") {
+          // Koopa
+          enemyMesh = new THREE.Group();
+
+          // Koopa shell
+          const shellGeometry = new THREE.SphereGeometry(0.5, 32, 16);
+          const shellMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+          });
+          const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+          shell.scale.y = 0.8;
+          shell.castShadow = true;
+
+          // Koopa body
+          const bodyGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.4);
+          const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+          });
+          const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+          body.position.y = 0.4;
+          body.castShadow = true;
+
+          enemyMesh.add(shell);
+          enemyMesh.add(body);
+
+          health = 2; // Koopas are tougher
+        } else if (type === "bulletBill") {
+          // Bullet Bill
+          enemyMesh = new THREE.Group();
+
+          // Bullet body
+          const bulletGeometry = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 32);
+          const bulletMaterial = new THREE.MeshStandardMaterial({
+            color: 0x000000,
+          });
+          const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+          bullet.rotation.z = Math.PI / 2;
+          bullet.castShadow = true;
+
+          // Bullet eyes
+          const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+          const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          leftEye.position.set(0.6, 0.2, 0.2);
+          const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          rightEye.position.set(0.6, 0.2, -0.2);
+
+          enemyMesh.add(bullet);
+          enemyMesh.add(leftEye);
+          enemyMesh.add(rightEye);
+
+          speed *= 2; // Bullet Bills are faster
+          health = 1;
+        }
+
+        enemyMesh.position.set(x, y, z);
+        scene.add(enemyMesh);
+
+        enemies.push({
+          mesh: enemyMesh,
+          type: type,
+          position: { x, y, z },
+          speed: speed,
+          movementRange: movementRange,
+          initialPosition: { x, y, z },
+          movementOffset: 0,
+          health: health,
+          direction: new THREE.Vector3(1, 0, 0),
+        });
+
+        return enemyMesh;
+      }
+
+      function createPowerUp(x, y, z, type) {
+        let powerUpMesh;
+
+        if (type === "mushroom") {
+          // Super Mushroom
+          powerUpMesh = new THREE.Group();
+
+          const capGeometry = new THREE.SphereGeometry(0.3, 32, 16);
+          const capMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+          });
+          const cap = new THREE.Mesh(capGeometry, capMaterial);
+          cap.scale.y = 0.5;
+          cap.position.y = 0.15;
+
+          const stemGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.3, 16);
+          const stemMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+          });
+          const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+
+          powerUpMesh.add(cap);
+          powerUpMesh.add(stem);
+        } else if (type === "fireFlower") {
+          // Fire Flower
+          powerUpMesh = new THREE.Group();
+
+          const stemGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 16);
+          const stemMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+          });
+          const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+
+          const petalGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+          const petalMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff4500,
+          });
+
+          for (let i = 0; i < 6; i++) {
+            const petal = new THREE.Mesh(petalGeometry, petalMaterial);
+            const angle = (i / 6) * Math.PI * 2;
+            petal.position.set(
+              Math.cos(angle) * 0.3,
+              0.3,
+              Math.sin(angle) * 0.3
+            );
+            powerUpMesh.add(petal);
+          }
+
+          powerUpMesh.add(stem);
+        } else if (type === "star") {
+          // Star
+          const starGeometry = new THREE.OctahedronGeometry(0.4, 1);
+          const starMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            metalness: 0.7,
+            roughness: 0.3,
+            emissive: 0xffff00,
+            emissiveIntensity: 0.5,
+          });
+          powerUpMesh = new THREE.Mesh(starGeometry, starMaterial);
+        }
+
+        powerUpMesh.position.set(x, y, z);
+        powerUpMesh.castShadow = true;
+        scene.add(powerUpMesh);
+
+        powerUps.push({
+          mesh: powerUpMesh,
+          type: type,
+          position: { x, y, z },
+          collected: false,
+          rotationSpeed: Math.random() * 0.05 + 0.02,
+          bounceOffset: 0,
+          bounceSpeed: Math.random() * 0.03 + 0.02,
+        });
+
+        return powerUpMesh;
+      }
+
+      function createStarPiece(x, y, z) {
+        const starPieceGeometry = new THREE.SphereGeometry(0.2, 32, 16);
+        const starPieceMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffff00,
+        });
+        const starPiece = new THREE.Mesh(starPieceGeometry, starPieceMaterial);
+        starPiece.position.set(x, y, z);
+        starPiece.castShadow = true;
+        scene.add(starPiece);
+
+        starPieces.push({
+          mesh: starPiece,
+          position: { x, y, z },
+          collected: false,
+        });
+
+        return starPiece;
+      }
+
+      function createCastle(x, y, z) {
+        const castle = new THREE.Group();
+
+        // Main tower
+        const towerGeometry = new THREE.BoxGeometry(8, 15, 8);
+        const towerMaterial = new THREE.MeshStandardMaterial({
+          color: 0xdddddd,
+        });
+        const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+        tower.position.y = 7.5;
+        tower.castShadow = true;
+        castle.add(tower);
+
+        // Roof
+        const roofGeometry = new THREE.ConeGeometry(6, 5, 4);
+        const roofMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff0000,
+        });
+        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof.position.y = 17.5;
+        roof.castShadow = true;
+        castle.add(roof);
+
+        // Side towers
+        const sideTowerGeometry = new THREE.CylinderGeometry(2, 2, 12, 8);
+        const sideTowerMaterial = new THREE.MeshStandardMaterial({
+          color: 0xdddddd,
+        });
+
+        const positions = [
+          { x: 6, z: 6 },
+          { x: -6, z: 6 },
+          { x: 6, z: -6 },
+          { x: -6, z: -6 },
+        ];
+
+        positions.forEach((pos) => {
+          const sideTower = new THREE.Mesh(
+            sideTowerGeometry,
+            sideTowerMaterial
+          );
+          sideTower.position.set(pos.x, 6, pos.z);
+          sideTower.castShadow = true;
+          castle.add(sideTower);
+
+          const smallRoof = new THREE.Mesh(
+            new THREE.ConeGeometry(2.2, 3, 8),
+            roofMaterial
+          );
+          smallRoof.position.set(pos.x, 12.5, pos.z);
+          smallRoof.castShadow = true;
+          castle.add(smallRoof);
+        });
+
+        // Door
+        const doorGeometry = new THREE.BoxGeometry(2, 3, 0.2);
+        const doorMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b4513,
+        });
+        const door = new THREE.Mesh(doorGeometry, doorMaterial);
+        door.position.set(0, 1.5, 4);
+        door.castShadow = true;
+        castle.add(door);
+
+        // Windows
+        const windowGeometry = new THREE.BoxGeometry(1.5, 1.5, 0.1);
+        const windowMaterial = new THREE.MeshStandardMaterial({
+          color: 0x87ceeb,
+          transparent: true,
+          opacity: 0.7,
+        });
+
+        const windowPositions = [
+          { x: -2, y: 5, z: 4 },
+          { x: 2, y: 5, z: 4 },
+          { x: -2, y: 8, z: 4 },
+          { x: 2, y: 8, z: 4 },
+          { x: 0, y: 11, z: 4 },
+        ];
+
+        windowPositions.forEach((pos) => {
+          const window = new THREE.Mesh(windowGeometry, windowMaterial);
+          window.position.set(pos.x, pos.y, pos.z);
+          castle.add(window);
+        });
+
+        castle.position.set(x, y, z);
+        scene.add(castle);
+
+        return castle;
+      }
+
+      function createTree(x, y, z, color = 0x228b22) {
+        const tree = new THREE.Group();
+
+        // Trunk
+        const trunkGeometry = new THREE.CylinderGeometry(0.4, 0.5, 2, 8);
+        const trunkMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b4513,
+        });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.y = 1;
+        trunk.castShadow = true;
+        tree.add(trunk);
+
+        // Leaves (multiple layers)
+        const leafMaterial = new THREE.MeshStandardMaterial({ color: color });
+
+        for (let i = 0; i < 3; i++) {
+          const leafGeometry = new THREE.ConeGeometry(2 - i * 0.5, 2, 8);
+          const leaves = new THREE.Mesh(leafGeometry, leafMaterial);
+          leaves.position.y = 2.5 + i * 1.2;
+          leaves.castShadow = true;
+          tree.add(leaves);
+        }
+
+        tree.position.set(x, y, z);
+        scene.add(tree);
+
+        return tree;
+      }
+
+      function createCloud(x, y, z, color = 0xffffff) {
+        const cloud = new THREE.Group();
+
+        const cloudGeometry = new THREE.SphereGeometry(1, 16, 16);
+        const cloudMaterial = new THREE.MeshStandardMaterial({
+          color: color,
+          transparent: true,
+          opacity: 0.8,
+        });
+
+        // Create multiple spheres for puffy cloud appearance
+        const positions = [
+          { x: 0, y: 0, z: 0, scale: 1 },
+          { x: 1.2, y: -0.2, z: 0, scale: 0.8 },
+          { x: -1.2, y: -0.1, z: 0, scale: 0.9 },
+          { x: 0.8, y: 0.3, z: 0.5, scale: 0.7 },
+          { x: -0.7, y: 0.2, z: -0.5, scale: 0.75 },
+        ];
+
+        positions.forEach((pos) => {
+          const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
+          cloudPart.position.set(pos.x, pos.y, pos.z);
+          cloudPart.scale.set(pos.scale, pos.scale, pos.scale);
+          cloud.add(cloudPart);
+        });
+
+        cloud.position.set(x, y, z);
+        scene.add(cloud);
+
+        return cloud;
+      }
+
+      function createLava(x, y, z, width, height, depth) {
+        const lavaGeometry = new THREE.BoxGeometry(width, height, depth);
+        const lavaMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff4500,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.5,
+          transparent: true,
+          opacity: 0.8,
+        });
+
+        const lava = new THREE.Mesh(lavaGeometry, lavaMaterial);
+        lava.position.set(x, y, z);
+        scene.add(lava);
+
+        obstacles.push({
+          mesh: lava,
+          type: "lava",
+          position: { x, y, z },
+          width: width,
+          height: height,
+          depth: depth,
+        });
+
+        return lava;
+      }
+
+      function createMountain(x, y, z, width, height) {
+        const mountain = new THREE.Group();
+
+        // Main peak
+        const peakGeometry = new THREE.ConeGeometry(width, height, 8);
+        const peakMaterial = new THREE.MeshStandardMaterial({
+          color: 0x808080,
+          roughness: 0.8,
+        });
+
+        const peak = new THREE.Mesh(peakGeometry, peakMaterial);
+        peak.position.y = height / 2;
+        peak.castShadow = true;
+        mountain.add(peak);
+
+        // Snow cap
+        const snowGeometry = new THREE.ConeGeometry(
+          width * 0.4,
+          height * 0.2,
+          8
+        );
+        const snowMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.3,
+        });
+
+        const snow = new THREE.Mesh(snowGeometry, snowMaterial);
+        snow.position.y = height - height * 0.1;
+        snow.castShadow = true;
+        mountain.add(snow);
+
+        mountain.position.set(x, y, z);
+        scene.add(mountain);
+
+        return mountain;
+      }
+
+      function createVolcano(x, y, z, width, height) {
+        const volcano = new THREE.Group();
+
+        // Main volcano cone
+        const volcanoGeometry = new THREE.ConeGeometry(width, height, 16);
+        const volcanoMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b0000,
+          roughness: 0.7,
+        });
+
+        const cone = new THREE.Mesh(volcanoGeometry, volcanoMaterial);
+        cone.position.y = height / 2;
+        cone.castShadow = true;
+        volcano.add(cone);
+
+        // Crater
+        const craterGeometry = new THREE.CylinderGeometry(
+          width * 0.2,
+          width * 0.3,
+          height * 0.1,
+          16
+        );
+        const craterMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff4500,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.5,
+        });
+
+        const crater = new THREE.Mesh(craterGeometry, craterMaterial);
+        crater.position.y = height - height * 0.05;
+        volcano.add(crater);
+
+        volcano.position.set(x, y, z);
+        scene.add(volcano);
+
+        return volcano;
+      }
+
+      function createObstacle(x, y, z, type) {
+        let obstacleMesh;
+
+        if (type === "pipe") {
+          // Create pipe
+          const pipeGroup = new THREE.Group();
+
+          // Pipe body
+          const bodyGeometry = new THREE.CylinderGeometry(0.7, 0.7, 3, 16);
+          const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+          });
+          const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+          body.position.y = 1.5;
+          body.castShadow = true;
+
+          // Pipe rim
+          const rimGeometry = new THREE.CylinderGeometry(0.9, 0.9, 0.3, 16);
+          const rim = new THREE.Mesh(rimGeometry, bodyMaterial);
+          rim.position.y = 3;
+          rim.castShadow = true;
+
+          pipeGroup.add(body);
+          pipeGroup.add(rim);
+          obstacleMesh = pipeGroup;
+        } else if (type === "thwomp") {
+          // Create Thwomp
+          const thwompGroup = new THREE.Group();
+
+          // Thwomp body
+          const bodyGeometry = new THREE.BoxGeometry(2, 2, 2);
+          const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080,
+          });
+          const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+          body.castShadow = true;
+
+          // Thwomp face
+          const faceGeometry = new THREE.PlaneGeometry(1.5, 1.5);
+          const faceMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+          const face = new THREE.Mesh(faceGeometry, faceMaterial);
+          face.position.z = 1.01;
+
+          thwompGroup.add(body);
+          thwompGroup.add(face);
+          obstacleMesh = thwompGroup;
+        }
+
+        if (obstacleMesh) {
+          obstacleMesh.position.set(x, y, z);
+          scene.add(obstacleMesh);
+
+          obstacles.push({
+            mesh: obstacleMesh,
+            type: type,
+            position: { x, y, z },
+            initialY: y,
+            active: false,
+            cooldown: 0,
+          });
+        }
+
+        return obstacleMesh;
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const delta = 1 / 60; // Assuming 60fps
+
+        if (!gameOver && !levelComplete) {
+          updateGame(delta);
+          updateCamera();
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      function updateGame(delta) {
+        // Update Mario's physics
+        updateMarioPhysics(delta);
+
+        // Update entities
+        updateCoins(delta);
+        updatePowerUps(delta);
+        updateEnemies(delta);
+        updateObstacles(delta);
+        updateFireballs(delta);
+        updateParticleEffects(delta);
+
+        // Update Bowser if present
+        if (bowser && !bowserDefeated) {
+          updateBowser(delta);
+        }
+
+        // Update timers
+        updateTimers(delta);
+
+        // Check win/lose conditions
+        checkGameConditions();
+      }
+
+      function updateMarioPhysics(delta) {
+        // Apply gravity
+        velocity.y -= gravity;
+
+        // Handle movement
+        const moveSpeed = 0.2;
+        if (keysPressed["KeyA"] || keysPressed["ArrowLeft"]) {
+          velocity.x = -moveSpeed;
+          mario.rotation.y = Math.PI / 2;
+        } else if (keysPressed["KeyD"] || keysPressed["ArrowRight"]) {
+          velocity.x = moveSpeed;
+          mario.rotation.y = -Math.PI / 2;
+        } else {
+          velocity.x *= 0.9; // Friction
+        }
+
+        if (keysPressed["KeyW"] || keysPressed["ArrowUp"]) {
+          velocity.z = -moveSpeed;
+          mario.rotation.y = 0;
+        } else if (keysPressed["KeyS"] || keysPressed["ArrowDown"]) {
+          velocity.z = moveSpeed;
+          mario.rotation.y = Math.PI;
+        } else {
+          velocity.z *= 0.9; // Friction
+        }
+
+        // Update position
+        mario.position.x += velocity.x;
+        mario.position.y += velocity.y;
+        mario.position.z += velocity.z;
+
+        // Check collisions
+        checkCollisions();
+
+        // Prevent falling below ground
+        if (mario.position.y < 1) {
+          mario.position.y = 1;
+          velocity.y = 0;
+          isJumping = false;
+          canDoubleJump = true;
+        }
+      }
+
+      function updateCamera() {
+        const cameraOffset = new THREE.Vector3(0, 5, 10);
+        const targetPosition = mario.position.clone().add(cameraOffset);
+        camera.position.lerp(targetPosition, 0.1);
+        camera.lookAt(mario.position);
+      }
+
+      function updateTimers(delta) {
+        // Update power-up timer
+        if (powerUpTimer > 0) {
+          powerUpTimer -= delta;
+          if (powerUpTimer <= 0) {
+            currentPowerUp = "none";
+            document.getElementById("power-up-indicator").style.display =
+              "none";
+          }
+        }
+
+        // Update invincibility timer
+        if (invincibilityTimer > 0) {
+          invincibilityTimer -= delta;
+          if (invincibilityTimer <= 0) {
+            invincible = false;
+            mario.material.opacity = 1;
+          }
+        }
+
+        // Update fireball cooldown
+        if (fireballCooldown > 0) {
+          fireballCooldown -= delta;
+          if (fireballCooldown <= 0) {
+            canShootFireball = true;
+          }
+        }
+
+        // Update game timer
+        if (timeRemaining > 0) {
+          timeRemaining -= delta;
+          document.getElementById("time").textContent = `Time: ${Math.ceil(
+            timeRemaining
+          )}`;
+          if (timeRemaining <= 0) {
+            gameOver = true;
+            showGameOver();
+          }
+        }
+      }
+
+      function setupEventListeners() {
+        // Keyboard controls
+        window.addEventListener("keydown", (e) => {
+          keysPressed[e.code] = true;
+
+          // Jump
+          if ((e.code === "Space" || e.code === "KeyJ") && !isJumping) {
+            velocity.y = jumpForce;
+            isJumping = true;
+          } else if (
+            (e.code === "Space" || e.code === "KeyJ") &&
+            canDoubleJump
+          ) {
+            velocity.y = jumpForce * 0.8;
+            canDoubleJump = false;
+          }
+
+          // Shoot fireball
+          if (
+            e.code === "KeyF" &&
+            currentPowerUp === "fireFlower" &&
+            canShootFireball
+          ) {
+            shootFireball();
+            fireballCooldown = 0.5;
+            canShootFireball = false;
+          }
+        });
+
+        window.addEventListener("keyup", (e) => {
+          keysPressed[e.code] = false;
+        });
+
+        // Window resize
+        window.addEventListener("resize", () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Button events
+        document
+          .getElementById("restart-button")
+          .addEventListener("click", () => {
+            resetGame();
+          });
+
+        document
+          .getElementById("next-level-button")
+          .addEventListener("click", () => {
+            currentLevel++;
+            createLevel(currentLevel);
+            document.getElementById("level-complete").style.display = "none";
+          });
+      }
+
+      function updateMissionDisplay() {
+        document.getElementById(
+          "mission-title"
+        ).textContent = `Mission: Level ${currentLevel}`;
+        document.getElementById("mission-description").textContent =
+          currentMissionState;
+      }
+
+      function createBowserCastle(x, y, z) {
+        const castle = new THREE.Group();
+
+        // Main structure
+        const baseGeometry = new THREE.BoxGeometry(20, 25, 20);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+          color: 0x1a1a1a,
+          roughness: 0.8,
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 12.5;
+        base.castShadow = true;
+        castle.add(base);
+
+        // Towers
+        const towerGeometry = new THREE.CylinderGeometry(2, 2.5, 30, 8);
+        const towerMaterial = new THREE.MeshStandardMaterial({
+          color: 0x1a1a1a,
+        });
+
+        const towerPositions = [
+          { x: 8, z: 8 },
+          { x: -8, z: 8 },
+          { x: 8, z: -8 },
+          { x: -8, z: -8 },
+        ];
+
+        towerPositions.forEach((pos) => {
+          const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+          tower.position.set(pos.x, 15, pos.z);
+          tower.castShadow = true;
+          castle.add(tower);
+
+          // Tower spikes
+          const spikeGeometry = new THREE.ConeGeometry(2.5, 5, 8);
+          const spikeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8b0000,
+          });
+          const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+          spike.position.set(pos.x, 32.5, pos.z);
+          spike.castShadow = true;
+          castle.add(spike);
+        });
+
+        // Main entrance
+        const entranceGeometry = new THREE.BoxGeometry(6, 8, 2);
+        const entranceMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b0000,
+        });
+        const entrance = new THREE.Mesh(entranceGeometry, entranceMaterial);
+        entrance.position.set(0, 4, 10);
+        entrance.castShadow = true;
+        castle.add(entrance);
+
+        // Lava moat
+        createLava(x, -0.3, z, 30, 0.3, 30);
+
+        castle.position.set(x, y, z);
+        scene.add(castle);
+
+        return castle;
+      }
+
+      function createBowser(x, y, z) {
+        const bowserGroup = new THREE.Group();
+
+        // Body
+        const bodyGeometry = new THREE.BoxGeometry(3, 3, 4);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffd700,
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.castShadow = true;
+        bowserGroup.add(body);
+
+        // Shell
+        const shellGeometry = new THREE.SphereGeometry(2, 32, 16);
+        const shellMaterial = new THREE.MeshStandardMaterial({
+          color: 0x008000,
+          roughness: 0.7,
+        });
+        const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+        shell.scale.y = 0.7;
+        shell.position.z = -0.5;
+        shell.castShadow = true;
+        bowserGroup.add(shell);
+
+        // Head
+        const headGeometry = new THREE.BoxGeometry(2.5, 2.5, 2.5);
+        const headMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffd700,
+        });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.set(0, 2.5, 1);
+        head.castShadow = true;
+        bowserGroup.add(head);
+
+        // Horns
+        const hornGeometry = new THREE.ConeGeometry(0.3, 1, 8);
+        const hornMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+        });
+
+        const leftHorn = new THREE.Mesh(hornGeometry, hornMaterial);
+        leftHorn.position.set(0.8, 3.5, 1);
+        leftHorn.castShadow = true;
+        bowserGroup.add(leftHorn);
+
+        const rightHorn = new THREE.Mesh(hornGeometry, hornMaterial);
+        rightHorn.position.set(-0.8, 3.5, 1);
+        rightHorn.castShadow = true;
+        bowserGroup.add(rightHorn);
+
+        // Eyes
+        const eyeGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        leftEye.position.set(0.7, 2.7, 2.3);
+        bowserGroup.add(leftEye);
+
+        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        rightEye.position.set(-0.7, 2.7, 2.3);
+        bowserGroup.add(rightEye);
+
+        bowserGroup.position.set(x, y, z);
+        scene.add(bowserGroup);
+
+        bowser = {
+          mesh: bowserGroup,
+          position: { x, y, z },
+          health: bowserHealth,
+          state: "idle",
+          attackCooldown: 0,
+          moveDirection: new THREE.Vector3(1, 0, 0),
+          parts: {
+            body,
+            shell,
+            head,
+            leftHorn,
+            rightHorn,
+            leftEye,
+            rightEye,
+          },
+        };
+
+        return bowserGroup;
+      }
+
+      function checkCollisions() {
+        // Platform collisions
+        platforms.forEach((platform) => {
+          if (detectCollision(mario, platform.mesh)) {
+            resolveCollision(mario, platform.mesh);
+          }
+        });
+
+        // Coin collisions
+        coins.forEach((coin) => {
+          if (!coin.collected && detectCollision(mario, coin.mesh)) {
+            collectCoin(coin);
+          }
+        });
+
+        // Power-up collisions
+        powerUps.forEach((powerUp) => {
+          if (!powerUp.collected && detectCollision(mario, powerUp.mesh)) {
+            collectPowerUp(powerUp);
+          }
+        });
+
+        // Enemy collisions
+        enemies.forEach((enemy) => {
+          if (detectCollision(mario, enemy.mesh)) {
+            if (
+              velocity.y < 0 &&
+              mario.position.y > enemy.mesh.position.y + 1
+            ) {
+              // Jumped on enemy
+              defeatEnemy(enemy);
+            } else if (!invincible) {
+              // Hit by enemy
+              hurtMario();
+            }
+          }
+        });
+
+        // Star piece collisions
+        starPieces.forEach((starPiece) => {
+          if (!starPiece.collected && detectCollision(mario, starPiece.mesh)) {
+            collectStarPiece(starPiece);
+          }
+        });
+
+        // Obstacle collisions
+        obstacles.forEach((obstacle) => {
+          if (detectCollision(mario, obstacle.mesh)) {
+            if (obstacle.type === "lava" && !invincible) {
+              hurtMario();
+            } else {
+              resolveCollision(mario, obstacle.mesh);
+            }
+          }
+        });
+
+        // Bowser collision
+        if (bowser && !bowserDefeated && detectCollision(mario, bowser.mesh)) {
+          if (!invincible) {
+            hurtMario();
+          }
+        }
+      }
+
+      function detectCollision(obj1, obj2) {
+        const box1 = new THREE.Box3().setFromObject(obj1);
+        const box2 = new THREE.Box3().setFromObject(obj2);
+        return box1.intersectsBox(box2);
+      }
+
+      function resolveCollision(obj1, obj2) {
+        const box1 = new THREE.Box3().setFromObject(obj1);
+        const box2 = new THREE.Box3().setFromObject(obj2);
+
+        const overlap = {
+          x: Math.min(box1.max.x - box2.min.x, box2.max.x - box1.min.x),
+          y: Math.min(box1.max.y - box2.min.y, box2.max.y - box1.min.y),
+          z: Math.min(box1.max.z - box2.min.z, box2.max.z - box1.min.z),
+        };
+
+        // Find smallest overlap
+        if (overlap.x < overlap.y && overlap.x < overlap.z) {
+          if (obj1.position.x < obj2.position.x) {
+            obj1.position.x -= overlap.x;
+          } else {
+            obj1.position.x += overlap.x;
+          }
+          velocity.x = 0;
+        } else if (overlap.y < overlap.z) {
+          if (obj1.position.y < obj2.position.y) {
+            obj1.position.y -= overlap.y;
+            velocity.y = 0;
+          } else {
+            obj1.position.y += overlap.y;
+            velocity.y = 0;
+            isJumping = false;
+            canDoubleJump = true;
+          }
+        } else {
+          if (obj1.position.z < obj2.position.z) {
+            obj1.position.z -= overlap.z;
+          } else {
+            obj1.position.z += overlap.z;
+          }
+          velocity.z = 0;
+        }
+      }
+
+      function updateCoins(delta) {
+        coins.forEach((coin) => {
+          if (!coin.collected) {
+            coin.mesh.rotation.y += coin.rotationSpeed;
+          }
+        });
+      }
+
+      function updatePowerUps(delta) {
+        powerUps.forEach((powerUp) => {
+          if (!powerUp.collected) {
+            powerUp.mesh.rotation.y += powerUp.rotationSpeed;
+            powerUp.bounceOffset += powerUp.bounceSpeed;
+            powerUp.mesh.position.y =
+              powerUp.position.y + Math.sin(powerUp.bounceOffset) * 0.2;
+          }
+        });
+      }
+
+      function updateEnemies(delta) {
+        enemies.forEach((enemy) => {
+          if (enemy.type === "goomba" || enemy.type === "koopa") {
+            // Basic patrolling movement
+            enemy.movementOffset += enemy.speed;
+            enemy.mesh.position.x =
+              enemy.initialPosition.x +
+              Math.sin(enemy.movementOffset) * enemy.movementRange;
+          } else if (enemy.type === "bulletBill") {
+            // Straight line movement
+            enemy.mesh.position.add(
+              enemy.direction.multiplyScalar(enemy.speed)
+            );
+
+            // Remove if out of bounds
+            if (
+              Math.abs(enemy.mesh.position.x) > 50 ||
+              Math.abs(enemy.mesh.position.z) > 50
+            ) {
+              scene.remove(enemy.mesh);
+              enemies.splice(enemies.indexOf(enemy), 1);
+            }
+          }
+        });
+      }
+
+      function updateObstacles(delta) {
+        obstacles.forEach((obstacle) => {
+          if (obstacle.type === "thwomp") {
+            if (obstacle.active) {
+              // Falling
+              obstacle.mesh.position.y -= 0.5;
+              if (obstacle.mesh.position.y <= obstacle.initialY) {
+                obstacle.mesh.position.y = obstacle.initialY;
+                obstacle.active = false;
+                obstacle.cooldown = 2;
+              }
+            } else if (obstacle.cooldown > 0) {
+              // Cooldown
+              obstacle.cooldown -= delta;
+            } else {
+              // Reset position
+              obstacle.mesh.position.y = obstacle.initialY + 5;
+              obstacle.active = true;
+            }
+          }
+        });
+      }
+
+      function updateBowser(delta) {
+        if (bowser.state === "idle") {
+          // Random movement
+          bowser.moveDirection.x = Math.sin(Date.now() * 0.001) * 0.1;
+          bowser.moveDirection.z = Math.cos(Date.now() * 0.001) * 0.1;
+          bowser.mesh.position.add(bowser.moveDirection);
+
+          // Attack cooldown
+          if (bowser.attackCooldown > 0) {
+            bowser.attackCooldown -= delta;
+          } else {
+            bowserAttack();
+          }
+        }
+      }
+
+      function bowserAttack() {
+        // Choose random attack
+        const attackType = Math.random() < 0.5 ? "fireball" : "charge";
+
+        if (attackType === "fireball") {
+          shootBowserFireball();
+        } else {
+          chargeTowardsMario();
+        }
+
+        bowser.attackCooldown = 3;
+      }
+
+      function shootFireball() {
+        const fireballGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const fireballMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff4500,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.5,
+        });
+
+        const fireball = new THREE.Mesh(fireballGeometry, fireballMaterial);
+        fireball.position.copy(mario.position);
+        fireball.position.y += 1;
+
+        const direction = new THREE.Vector3();
+        direction.copy(camera.target).sub(mario.position).normalize();
+
+        scene.add(fireball);
+
+        fireballs.push({
+          mesh: fireball,
+          direction: direction,
+          speed: 0.5,
+          fromMario: true,
+        });
+      }
+
+      function shootBowserFireball() {
+        const fireballGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+        const fireballMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b0000,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.7,
+        });
+
+        const fireball = new THREE.Mesh(fireballGeometry, fireballMaterial);
+        fireball.position.copy(bowser.mesh.position);
+        fireball.position.y += 2;
+
+        const direction = new THREE.Vector3();
+        direction.copy(mario.position).sub(bowser.mesh.position).normalize();
+
+        scene.add(fireball);
+
+        fireballs.push({
+          mesh: fireball,
+          direction: direction,
+          speed: 0.3,
+          fromMario: false,
+        });
+      }
+
+      function updateFireballs(delta) {
+        for (let i = fireballs.length - 1; i >= 0; i--) {
+          const fireball = fireballs[i];
+          fireball.mesh.position.add(
+            fireball.direction.multiplyScalar(fireball.speed)
+          );
+
+          // Check collisions
+          if (fireball.fromMario) {
+            if (
+              bowser &&
+              !bowserDefeated &&
+              detectCollision(fireball.mesh, bowser.mesh)
+            ) {
+              hitBowser();
+              removeFireball(i);
+            }
+          } else if (detectCollision(fireball.mesh, mario) && !invincible) {
+            hurtMario();
+            removeFireball(i);
+          }
+
+          // Remove if out of bounds
+          if (
+            Math.abs(fireball.mesh.position.x) > 50 ||
+            Math.abs(fireball.mesh.position.y) > 50 ||
+            Math.abs(fireball.mesh.position.z) > 50
+          ) {
+            removeFireball(i);
+          }
+        }
+      }
+
+      function removeFireball(index) {
+        scene.remove(fireballs[index].mesh);
+        fireballs.splice(index, 1);
+      }
+
+      function collectCoin(coin) {
+        coin.collected = true;
+        scene.remove(coin.mesh);
+        coinCount++;
+        document.getElementById("score").textContent = `Coins: ${coinCount}`;
+
+        if (coinCount >= 20 && !castleUnlocked) {
+          castleUnlocked = true;
+          currentMissionState = MISSION_STATES.STAR_PIECES;
+          updateMissionDisplay();
+        }
+      }
+
+      function collectPowerUp(powerUp) {
+        powerUp.collected = true;
+        scene.remove(powerUp.mesh);
+
+        if (powerUp.type === "mushroom") {
+          // Grow Mario
+          mario.scale.set(1.5, 1.5, 1.5);
+          powerUpTimer = 15;
+        } else if (powerUp.type === "fireFlower") {
+          currentPowerUp = "fireFlower";
+          canShootFireball = true;
+          document.getElementById("power-up-indicator").textContent =
+            "Power-up: Fire Flower";
+          document.getElementById("power-up-indicator").style.display = "block";
+        } else if (powerUp.type === "star") {
+          invincible = true;
+          invincibilityTimer = 10;
+          mario.material.opacity = 0.7;
+        }
+      }
+
+      function collectStarPiece(starPiece) {
+        starPiece.collected = true;
+        scene.remove(starPiece.mesh);
+        starPiecesCollected++;
+
+        if (starPiecesCollected >= totalStarPieces) {
+          currentMissionState = MISSION_STATES.DEFEAT_BOWSER;
+          updateMissionDisplay();
+        }
+      }
+
+      function hurtMario() {
+        if (!invincible) {
+          lives--;
+          document.getElementById("lives").textContent = `Lives: ${lives}`;
+
+          if (lives <= 0) {
+            gameOver = true;
+            showGameOver();
+          } else {
+            // Temporary invincibility
+            invincible = true;
+            invincibilityTimer = 2;
+            mario.material.opacity = 0.7;
+
+            // Knockback
+            velocity.y = jumpForce * 0.5;
+            velocity.x = (mario.position.x < 0 ? 1 : -1) * 0.3;
+            velocity.z = (mario.position.z < 0 ? 1 : -1) * 0.3;
+          }
+        }
+      }
+
+      function hitBowser() {
+        bowser.health--;
+        createParticleEffect(bowser.mesh.position, 0xff0000);
+
+        if (bowser.health <= 0) {
+          defeatBowser();
+        }
+      }
+
+      function defeatBowser() {
+        bowserDefeated = true;
+        scene.remove(bowser.mesh);
+        currentMissionState = MISSION_STATES.COMPLETE;
+        updateMissionDisplay();
+        showLevelComplete();
+      }
+
+      function createParticleEffect(position, color) {
+        const particles = new THREE.Group();
+
+        for (let i = 0; i < 10; i++) {
+          const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+          const material = new THREE.MeshBasicMaterial({ color: color });
+          const particle = new THREE.Mesh(geometry, material);
+
+          particle.position.copy(position);
+          particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3,
+            Math.random() * 0.2,
+            (Math.random() - 0.5) * 0.3
+          );
+
+          particles.add(particle);
+        }
+
+        scene.add(particles);
+        particleEffects.push({
+          mesh: particles,
+          lifetime: 1,
+        });
+      }
+
+      function updateParticleEffects(delta) {
+        for (let i = particleEffects.length - 1; i >= 0; i--) {
+          const effect = particleEffects[i];
+          effect.lifetime -= delta;
+
+          effect.mesh.children.forEach((particle) => {
+            particle.position.add(particle.velocity);
+            particle.velocity.y -= gravity;
+          });
+
+          if (effect.lifetime <= 0) {
+            scene.remove(effect.mesh);
+            particleEffects.splice(i, 1);
+          }
+        }
+      }
+
+      function showGameOver() {
+        document.getElementById("game-over").style.display = "block";
+      }
+
+      function showLevelComplete() {
+        const stats = document.getElementById("level-stats");
+        stats.textContent = `Coins: ${coinCount} | Time: ${Math.ceil(
+          timeRemaining
+        )} | Stars: ${starPiecesCollected}`;
+        document.getElementById("level-complete").style.display = "block";
+      }
+
+      function resetGame() {
+        lives = 3;
+        coinCount = 0;
+        timeRemaining = 300;
+        starPiecesCollected = 0;
+        currentPowerUp = "none";
+        gameOver = false;
+        levelComplete = false;
+
+        document.getElementById("game-over").style.display = "none";
+        document.getElementById("power-up-indicator").style.display = "none";
+
+        mario.position.set(0, 1, 0);
+        mario.scale.set(1, 1, 1);
+        velocity.set(0, 0, 0);
+
+        createLevel(currentLevel);
+      }
+
+      // Initialize the game
+      init();
+    </script>
+  </body>
+</html>

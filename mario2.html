@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ultra Super Mario 3D</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+      #mission {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 14px;
+        max-width: 300px;
+      }
+      #gameOver {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        padding: 20px;
+        border-radius: 10px;
+        font-size: 24px;
+        text-align: center;
+        display: none;
+      }
+      #gameOver button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        background-color: #e22;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+      #startScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 100;
+      }
+      #startScreen h1 {
+        font-size: 48px;
+        color: #e22;
+        margin-bottom: 20px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      }
+      #startScreen button {
+        padding: 15px 30px;
+        font-size: 24px;
+        cursor: pointer;
+        background-color: #e22;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        margin-top: 20px;
+      }
+      #healthBar {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        width: 200px;
+        height: 20px;
+        background-color: #333;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      #healthFill {
+        height: 100%;
+        background-color: #e22;
+        width: 100%;
+        transition: width 0.3s;
+      }
+      #ammoCount {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 18px;
+      }
+      #crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 24px;
+        pointer-events: none;
+      }
+      #minimap {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 200px;
+        height: 200px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid white;
+      }
+      #minimapCanvas {
+        width: 100%;
+        height: 100%;
+      }
+      #doubleJumpIndicator {
+        position: absolute;
+        bottom: 45px;
+        left: 20px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      Score: <span id="score">0</span><br />
+      Enemies Defeated: <span id="enemiesDefeated">0</span><br />
+      Coins: <span id="coins">0</span>
+    </div>
+
+    <div id="mission">
+      <h3>Current Mission:</h3>
+      <p id="missionText">
+        Defeat the boss at the castle and save the princess!
+      </p>
+      <div id="objectives">
+        <p>• Collect 10 coins</p>
+        <p>• Defeat 5 enemies</p>
+        <p>• Find the key to the castle</p>
+      </div>
+    </div>
+
+    <div id="healthBar">
+      <div id="healthFill"></div>
+    </div>
+
+    <div id="doubleJumpIndicator">Double Jump: Ready</div>
+
+    <div id="ammoCount">
+      Weapon: <span id="weapon">Pistol</span> | Ammo: <span id="ammo">∞</span>
+    </div>
+
+    <div id="minimap">
+      <canvas id="minimapCanvas"></canvas>
+    </div>
+
+    <div id="crosshair">+</div>
+
+    <div id="gameOver">
+      Game Over!<br />
+      <span id="finalScore"></span>
+      <button id="restartButton">Play Again</button>
+    </div>
+
+    <div id="startScreen">
+      <h1>ULTRA SUPER MARIO 3D</h1>
+      <p>Use WASD to move, SPACE to jump, MOUSE to aim, LEFT CLICK to shoot</p>
+      <p>Press 1-4 to switch weapons (4 = Auto Gun that fires automatically)</p>
+      <p>Collect coins, defeat enemies, and complete the mission!</p>
+      <button id="startButton">Start Game</button>
+    </div>
+
+    <!-- Import Three.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/PointerLockControls.js"></script>
+    <script>
+      // Game variables
+      let scene, camera, renderer, controls;
+      let mario,
+        ground,
+        bullets = [],
+        enemies = [],
+        coins = [],
+        powerUps = [];
+      let moveForward = false,
+        moveBackward = false,
+        moveLeft = false,
+        moveRight = false,
+        canJump = false,
+        isSprinting = false,
+        isAutoFiring = false;
+      let velocity = new THREE.Vector3();
+      let direction = new THREE.Vector3();
+      let prevTime = performance.now();
+      let health = 100;
+      let ammo = Infinity; // Unlimited ammo
+      let score = 0;
+      let enemiesDefeated = 0;
+      let coinsCollected = 0;
+      let gameActive = false;
+      let currentWeapon = "pistol"; // Default weapon
+      let weaponDamage = {
+        pistol: 25,
+        shotgun: 75,
+        machineGun: 15,
+        autoGun: 10,
+      };
+      let weaponCooldown = {
+        pistol: 500, // 0.5 seconds
+        shotgun: 1000, // 1 second
+        machineGun: 100, // 0.1 seconds
+        autoGun: 50, // 0.05 seconds
+      };
+      let lastShotTime = 0;
+      let isOnPlatform = false;
+      let playerHeight = 2;
+      let jumpStrength = 15;
+      let movementSpeed = 10.0;
+      let gravity = 25;
+      let hasKey = false;
+      let bossCreated = false;
+      let canDoubleJump = true;
+      let minimapCanvas, minimapContext;
+      let currentMission = 0;
+      let missions = [
+        {
+          title: "Mission 1: Exploration",
+          description: "Explore the world and collect 5 coins",
+          objectives: ["• Collect 5 coins", "• Find the first checkpoint"],
+          completed: false,
+          checkCompletion: function () {
+            return coinsCollected >= 5;
+          },
+        },
+        {
+          title: "Mission 2: Elimination",
+          description: "Defeat enemies that are invading the kingdom",
+          objectives: ["• Defeat 5 enemies", "• Find the key to the castle"],
+          completed: false,
+          checkCompletion: function () {
+            return enemiesDefeated >= 5 && hasKey;
+          },
+        },
+        {
+          title: "Mission 3: Boss Battle",
+          description: "Defeat the boss and save the princess",
+          objectives: [
+            "• Find the castle",
+            "• Defeat the boss",
+            "• Rescue the princess",
+          ],
+          completed: false,
+          checkCompletion: function () {
+            return (
+              enemies.findIndex((e) => e.userData.type === "boss") === -1 &&
+              camera.position.distanceTo(new THREE.Vector3(20, 0, 20)) < 5
+            );
+          },
+        },
+      ];
+
+      // Initialize the game
+      function init() {
+        // Create scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+
+        // Create camera
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.y = 2;
+
+        // Create renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Create controls
+        controls = new THREE.PointerLockControls(camera, document.body);
+
+        // Add event listeners for controls
+        document
+          .getElementById("startButton")
+          .addEventListener("click", function () {
+            controls.lock();
+            document.getElementById("startScreen").style.display = "none";
+            gameActive = true;
+          });
+
+        document
+          .getElementById("restartButton")
+          .addEventListener("click", function () {
+            resetGame();
+            controls.lock();
+            document.getElementById("gameOver").style.display = "none";
+            gameActive = true;
+          });
+
+        controls.addEventListener("lock", function () {
+          gameActive = true;
+        });
+
+        controls.addEventListener("unlock", function () {
+          if (health <= 0) {
+            document.getElementById("gameOver").style.display = "block";
+            document.getElementById("finalScore").textContent =
+              "Final Score: " + score;
+          }
+        });
+
+        // Add lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        // Create ground
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b4513,
+          roughness: 0.8,
+        });
+        ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Create Mario (player)
+        const marioGeometry = new THREE.BoxGeometry(1, 2, 1);
+        const marioMaterial = new THREE.MeshStandardMaterial({
+          color: 0xff0000,
+        });
+        mario = new THREE.Mesh(marioGeometry, marioMaterial);
+        mario.position.y = 2;
+        mario.castShadow = true;
+        mario.receiveShadow = true;
+        scene.add(mario);
+
+        // Create level elements
+        createLevel();
+
+        // Add keyboard event listeners
+        document.addEventListener("keydown", onKeyDown);
+        document.addEventListener("keyup", onKeyUp);
+
+        // Add mouse click for shooting
+        document.addEventListener("click", onMouseClick);
+
+        // Handle window resize
+        window.addEventListener("resize", onWindowResize);
+
+        // Add key press for sprint
+        document.addEventListener("keydown", function (event) {
+          if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
+            isSprinting = true;
+          }
+        });
+
+        document.addEventListener("keyup", function (event) {
+          if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
+            isSprinting = false;
+          }
+        });
+
+        // Add weapon switching
+        document.addEventListener("keydown", function (event) {
+          if (event.code === "Digit1") {
+            currentWeapon = "pistol";
+            isAutoFiring = false;
+            updateWeaponDisplay();
+          } else if (event.code === "Digit2") {
+            currentWeapon = "shotgun";
+            isAutoFiring = false;
+            updateWeaponDisplay();
+          } else if (event.code === "Digit3") {
+            currentWeapon = "machineGun";
+            isAutoFiring = false;
+            updateWeaponDisplay();
+          } else if (event.code === "Digit4") {
+            currentWeapon = "autoGun";
+            isAutoFiring = true;
+            updateWeaponDisplay();
+          }
+        });
+
+        // Initialize minimap
+        minimapCanvas = document.getElementById("minimapCanvas");
+        minimapCanvas.width = 200;
+        minimapCanvas.height = 200;
+        minimapContext = minimapCanvas.getContext("2d");
+
+        // Update mission display
+        updateMissionDisplay();
+
+        // Start animation loop
+        animate();
+      }
+
+      function updateWeaponDisplay() {
+        let weaponName = "";
+        switch (currentWeapon) {
+          case "pistol":
+            weaponName = "Pistol";
+            break;
+          case "shotgun":
+            weaponName = "Shotgun";
+            break;
+          case "machineGun":
+            weaponName = "Machine Gun";
+            break;
+          case "autoGun":
+            weaponName = "Auto Gun";
+            break;
+        }
+        document.getElementById("weapon").textContent = weaponName;
+      }
+
+      // Create level with platforms, enemies, and collectibles
+      function createLevel() {
+        // Create platforms
+        createPlatform(0, 0.5, -10, 10, 1, 10);
+        createPlatform(10, 2, -5, 5, 1, 5);
+        createPlatform(-10, 3, 0, 5, 1, 5);
+        createPlatform(0, 4, 10, 10, 1, 5);
+        createPlatform(15, 5, 15, 5, 1, 5);
+
+        // Create castle (goal)
+        createCastle(20, 0, 20);
+
+        // Create enemies
+        for (let i = 0; i < 10; i++) {
+          createEnemy(Math.random() * 40 - 20, 1, Math.random() * 40 - 20);
+        }
+
+        // Create coins
+        for (let i = 0; i < 20; i++) {
+          createCoin(
+            Math.random() * 40 - 20,
+            1 + Math.random() * 5,
+            Math.random() * 40 - 20
+          );
+        }
+
+        // Create trees and decorations
+        for (let i = 0; i < 15; i++) {
+          createTree(Math.random() * 80 - 40, 0, Math.random() * 80 - 40);
+        }
+
+        // Create power-ups
+        for (let i = 0; i < 5; i++) {
+          createPowerUp(
+            Math.random() * 40 - 20,
+            1 + Math.random() * 5,
+            Math.random() * 40 - 20,
+            Math.floor(Math.random() * 3) // 0: health, 1: ammo, 2: speed boost
+          );
+        }
+
+        // Create key
+        createKey(15, 6, 15);
+      }
+
+      // Create a platform
+      function createPlatform(x, y, z, width, height, depth) {
+        const platformGeometry = new THREE.BoxGeometry(width, height, depth);
+        const platformMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b4513,
+          roughness: 0.7,
+        });
+        const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+        platform.position.set(x, y, z);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        scene.add(platform);
+        return platform;
+      }
+
+      // Create the castle (goal)
+      function createCastle(x, y, z) {
+        const castleGroup = new THREE.Group();
+
+        // Base
+        const baseGeometry = new THREE.BoxGeometry(10, 8, 10);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+          color: 0x888888,
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 4;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        castleGroup.add(base);
+
+        // Towers
+        for (let i = 0; i < 4; i++) {
+          const towerGeometry = new THREE.CylinderGeometry(1, 1, 12, 8);
+          const towerMaterial = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+          });
+          const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+
+          const angle = (i * Math.PI) / 2;
+          tower.position.x = 4 * Math.cos(angle);
+          tower.position.z = 4 * Math.sin(angle);
+          tower.position.y = 6;
+
+          tower.castShadow = true;
+          tower.receiveShadow = true;
+          castleGroup.add(tower);
+
+          // Tower tops
+          const topGeometry = new THREE.ConeGeometry(1.5, 2, 8);
+          const topMaterial = new THREE.MeshStandardMaterial({
+            color: 0xaa0000,
+          });
+          const top = new THREE.Mesh(topGeometry, topMaterial);
+          top.position.y = 6;
+          tower.add(top);
+        }
+
+        castleGroup.position.set(x, y, z);
+        castleGroup.userData = {
+          type: "castle",
+        };
+
+        scene.add(castleGroup);
+        return castleGroup;
+      }
+
+      // Create an enemy
+      function createEnemy(x, y, z) {
+        const enemyGroup = new THREE.Group();
+
+        // Enemy body
+        const bodyGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+          color: 0x663300,
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        enemyGroup.add(body);
+
+        // Enemy eyes
+        for (let i = 0; i < 2; i++) {
+          const eyeGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+          const eyeMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+          });
+          const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          eye.position.z = 0.5;
+          eye.position.x = i === 0 ? -0.3 : 0.3;
+          eye.position.y = 0.2;
+
+          const pupilGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+          const pupilMaterial = new THREE.MeshStandardMaterial({
+            color: 0x000000,
+          });
+          const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+          pupil.position.z = 0.1;
+          eye.add(pupil);
+
+          enemyGroup.add(eye);
+        }
+
+        enemyGroup.position.set(x, y, z);
+        enemyGroup.userData = {
+          type: "enemy",
+          health: 100,
+          speed: 0.03 + Math.random() * 0.02,
+          lastAttack: 0,
+        };
+
+        scene.add(enemyGroup);
+        enemies.push(enemyGroup);
+        return enemyGroup;
+      }
+
+      // Create a coin
+      function createCoin(x, y, z) {
+        const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16);
+        const coinMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffd700,
+          metalness: 0.8,
+          roughness: 0.2,
+        });
+        const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+        coin.rotation.x = Math.PI / 2;
+        coin.position.set(x, y, z);
+        coin.castShadow = true;
+        coin.receiveShadow = true;
+
+        coin.userData = {
+          type: "coin",
+          rotationSpeed: 0.02 + Math.random() * 0.02,
+        };
+
+        scene.add(coin);
+        coins.push(coin);
+        return coin;
+      }
+
+      // Create a tree
+      function createTree(x, y, z) {
+        const treeGroup = new THREE.Group();
+
+        // Tree trunk
+        const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+        const trunkMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8b4513,
+        });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.y = 1.5;
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
+        treeGroup.add(trunk);
+
+        // Tree leaves
+        const leavesGeometry = new THREE.ConeGeometry(2, 4, 8);
+        const leavesMaterial = new THREE.MeshStandardMaterial({
+          color: 0x228b22,
+        });
+        const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+        leaves.position.y = 5;
+        leaves.castShadow = true;
+        leaves.receiveShadow = true;
+        treeGroup.add(leaves);
+
+        treeGroup.position.set(x, y, z);
+        scene.add(treeGroup);
+        return treeGroup;
+      }
+
+      // Create a power-up
+      function createPowerUp(x, y, z, type) {
+        const powerUpGroup = new THREE.Group();
+
+        // Base geometry
+        let geometry, material, powerUpType;
+
+        switch (type) {
+          case 0: // Health
+            geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            material = new THREE.MeshStandardMaterial({
+              color: 0xff0000,
+              emissive: 0xff0000,
+              emissiveIntensity: 0.5,
+            });
+            powerUpType = "health";
+            break;
+          case 1: // Ammo
+            geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            material = new THREE.MeshStandardMaterial({
+              color: 0xffff00,
+              emissive: 0xffff00,
+              emissiveIntensity: 0.5,
+            });
+            powerUpType = "ammo";
+            break;
+          case 2: // Speed boost
+            geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            material = new THREE.MeshStandardMaterial({
+              color: 0x00ff00,
+              emissive: 0x00ff00,
+              emissiveIntensity: 0.5,
+            });
+            powerUpType = "speed";
+            break;
+        }
+
+        const powerUpMesh = new THREE.Mesh(geometry, material);
+        powerUpMesh.castShadow = true;
+        powerUpMesh.receiveShadow = true;
+        powerUpGroup.add(powerUpMesh);
+
+        // Add floating animation
+        powerUpGroup.position.set(x, y, z);
+        powerUpGroup.userData = {
+          type: "powerUp",
+          powerUpType: powerUpType,
+          floatOffset: Math.random() * Math.PI * 2,
+          rotationSpeed: 0.03,
+        };
+
+        scene.add(powerUpGroup);
+        powerUps.push(powerUpGroup);
+        return powerUpGroup;
+      }
+
+      // Create a key
+      function createKey(x, y, z) {
+        const keyGroup = new THREE.Group();
+
+        // Key body
+        const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 8);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffd700,
+          metalness: 0.8,
+          roughness: 0.2,
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.rotation.x = Math.PI / 2;
+        keyGroup.add(body);
+
+        // Key head
+        const headGeometry = new THREE.TorusGeometry(0.4, 0.1, 8, 16);
+        const head = new THREE.Mesh(headGeometry, bodyMaterial);
+        head.position.y = 0.6;
+        keyGroup.add(head);
+
+        keyGroup.position.set(x, y, z);
+        keyGroup.userData = {
+          type: "key",
+          floatOffset: Math.random() * Math.PI * 2,
+          rotationSpeed: 0.02,
+        };
+
+        scene.add(keyGroup);
+        return keyGroup;
+      }
+
+      // Create boss enemy
+      function createBossEnemy(x, y, z) {
+        const bossGroup = new THREE.Group();
+
+        // Boss body
+        const bodyGeometry = new THREE.BoxGeometry(3, 3, 3);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+          color: 0x660000,
+          roughness: 0.7,
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        bossGroup.add(body);
+
+        // Boss eyes
+        for (let i = 0; i < 2; i++) {
+          const eyeGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+          const eyeMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xff0000,
+            emissiveIntensity: 0.5,
+          });
+          const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+          eye.position.z = 1.2;
+          eye.position.x = i === 0 ? -0.8 : 0.8;
+          eye.position.y = 0.5;
+          bossGroup.add(eye);
+        }
+
+        // Boss spikes
+        for (let i = 0; i < 5; i++) {
+          const spikeGeometry = new THREE.ConeGeometry(0.3, 1, 8);
+          const spikeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x333333,
+          });
+          const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+          spike.position.y = 1.5;
+
+          const angle = (i / 5) * Math.PI * 2;
+          spike.position.x = Math.sin(angle) * 1.2;
+          spike.position.z = Math.cos(angle) * 1.2;
+
+          bossGroup.add(spike);
+        }
+
+        bossGroup.position.set(x, y, z);
+        bossGroup.userData = {
+          type: "boss",
+          health: 500,
+          maxHealth: 500,
+          speed: 0.05,
+          lastAttack: 0,
+          attackCooldown: 2000, // 2 seconds
+          attackDamage: 20,
+        };
+
+        scene.add(bossGroup);
+        enemies.push(bossGroup);
+
+        // Create boss health bar
+        const bossHealthBarContainer = document.createElement("div");
+        bossHealthBarContainer.id = "bossHealthBarContainer";
+        bossHealthBarContainer.style.position = "absolute";
+        bossHealthBarContainer.style.top = "50px";
+        bossHealthBarContainer.style.left = "50%";
+        bossHealthBarContainer.style.transform = "translateX(-50%)";
+        bossHealthBarContainer.style.width = "300px";
+        bossHealthBarContainer.style.height = "30px";
+        bossHealthBarContainer.style.backgroundColor = "#333";
+        bossHealthBarContainer.style.borderRadius = "5px";
+        bossHealthBarContainer.style.overflow = "hidden";
+        bossHealthBarContainer.style.display = "none";
+
+        const bossHealthBar = document.createElement("div");
+        bossHealthBar.id = "bossHealthBar";
+        bossHealthBar.style.width = "100%";
+        bossHealthBar.style.height = "100%";
+        bossHealthBar.style.backgroundColor = "#e22";
+        bossHealthBar.style.transition = "width 0.3s";
+
+        bossHealthBarContainer.appendChild(bossHealthBar);
+        document.body.appendChild(bossHealthBarContainer);
+
+        return bossGroup;
+      }
+
+      // Create a bullet
+      function createBullet() {
+        // Check cooldown
+        const currentTime = performance.now();
+        if (currentTime - lastShotTime < weaponCooldown[currentWeapon]) return;
+
+        lastShotTime = currentTime;
+
+        // No need to decrease ammo or check if it's 0 since it's unlimited
+        document.getElementById("ammo").textContent = "∞";
+
+        // Different bullet behavior based on weapon type
+        switch (currentWeapon) {
+          case "pistol":
+            createSingleBullet(0.2, 0xffff00, 0.8);
+            break;
+          case "shotgun":
+            // Create multiple bullets in a spread pattern
+            for (let i = 0; i < 5; i++) {
+              const spreadDirection = new THREE.Vector3();
+              camera.getWorldDirection(spreadDirection);
+
+              // Add random spread
+              spreadDirection.x += (Math.random() - 0.5) * 0.2;
+              spreadDirection.y += (Math.random() - 0.5) * 0.2;
+              spreadDirection.z += (Math.random() - 0.5) * 0.2;
+              spreadDirection.normalize();
+
+              createSingleBullet(0.15, 0xff6600, 0.7, spreadDirection);
+            }
+            break;
+          case "machineGun":
+            createSingleBullet(0.1, 0x00ffff, 1.2);
+            break;
+          case "autoGun":
+            // Create a stream of bullets with slight variation
+            createSingleBullet(0.15, 0xff00ff, 1.5);
+            break;
+        }
+      }
+
+      function createSingleBullet(size, color, speed, customDirection) {
+        const bulletGeometry = new THREE.SphereGeometry(size, 8, 8);
+        const bulletMaterial = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.5,
+        });
+        const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+
+        // Position the bullet at the camera position
+        bullet.position.copy(camera.position);
+
+        // Set the bullet's velocity in the direction the camera is facing
+        const direction = customDirection || new THREE.Vector3();
+        if (!customDirection) {
+          camera.getWorldDirection(direction);
+        }
+
+        bullet.userData = {
+          velocity: direction.multiplyScalar(speed),
+          lifetime: 100, // Bullet will disappear after this many frames
+          damage: weaponDamage[currentWeapon],
+        };
+
+        scene.add(bullet);
+        bullets.push(bullet);
+      }
+
+      // Handle keyboard input
+      function onKeyDown(event) {
+        switch (event.code) {
+          case "KeyW":
+          case "ArrowUp":
+            moveForward = true;
+            break;
+          case "KeyA":
+          case "ArrowLeft":
+            moveLeft = true;
+            break;
+          case "KeyS":
+          case "ArrowDown":
+            moveBackward = true;
+            break;
+          case "KeyD":
+          case "ArrowRight":
+            moveRight = true;
+            break;
+          case "Space":
+            if (canJump) {
+              velocity.y = jumpStrength;
+              canJump = false;
+            } else if (canDoubleJump) {
+              velocity.y = jumpStrength * 0.8;
+              canDoubleJump = false;
+              document.getElementById("doubleJumpIndicator").textContent =
+                "Double Jump: Used";
+              document.getElementById("doubleJumpIndicator").style.color =
+                "#aaa";
+            }
+            break;
+          case "KeyR":
+            // Reload
+            if (ammo < 30) {
+              ammo = 30;
+              document.getElementById("ammo").textContent = ammo;
+            }
+            break;
+        }
+      }
+
+      function onKeyUp(event) {
+        switch (event.code) {
+          case "KeyW":
+          case "ArrowUp":
+            moveForward = false;
+            break;
+          case "KeyA":
+          case "ArrowLeft":
+            moveLeft = false;
+            break;
+          case "KeyS":
+          case "ArrowDown":
+            moveBackward = false;
+            break;
+          case "KeyD":
+          case "ArrowRight":
+            moveRight = false;
+            break;
+        }
+      }
+
+      // Handle mouse click for shooting
+      function onMouseClick() {
+        if (gameActive && controls.isLocked) {
+          createBullet();
+        }
+      }
+
+      // Handle window resize
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // Update game state
+      function update(time) {
+        if (!gameActive) return;
+
+        const delta = (time - prevTime) / 1000;
+
+        // Update velocity with gravity and controls
+        velocity.y -= gravity * delta; // Apply gravity
+
+        // Get camera's forward and right vectors
+        const cameraDirection = new THREE.Vector3();
+        camera.getWorldDirection(cameraDirection);
+        cameraDirection.y = 0; // Keep movement on the horizontal plane
+        cameraDirection.normalize();
+
+        // Calculate camera's right vector (perpendicular to forward)
+        const cameraRight = new THREE.Vector3();
+        cameraRight.crossVectors(new THREE.Vector3(0, 1, 0), cameraDirection);
+
+        // Reset movement velocity
+        velocity.x = 0;
+        velocity.z = 0;
+
+        // Apply sprint multiplier if sprinting
+        const speedMultiplier = isSprinting ? 1.8 : 1.0;
+        const moveSpeed = movementSpeed * speedMultiplier * delta;
+
+        // Apply movement based on key presses - REVERSED DIRECTIONS
+        if (moveForward) {
+          // Move in the opposite direction of camera forward
+          velocity.x -= cameraDirection.x * moveSpeed;
+          velocity.z -= cameraDirection.z * moveSpeed;
+        }
+        if (moveBackward) {
+          // Move in the direction of camera forward
+          velocity.x += cameraDirection.x * moveSpeed;
+          velocity.z += cameraDirection.z * moveSpeed;
+        }
+        if (moveRight) {
+          // Move in the opposite direction of camera right
+          velocity.x -= cameraRight.x * moveSpeed;
+          velocity.z -= cameraRight.z * moveSpeed;
+        }
+        if (moveLeft) {
+          // Move in the direction of camera right
+          velocity.x += cameraRight.x * moveSpeed;
+          velocity.z += cameraRight.z * moveSpeed;
+        }
+
+        // Apply movement to camera
+        controls.moveRight(velocity.x);
+        controls.moveForward(velocity.z);
+
+        // Auto-firing weapon
+        if (isAutoFiring && gameActive && controls.isLocked) {
+          createBullet();
+        }
+
+        // Update camera height based on jumping/falling
+        camera.position.y += velocity.y * delta;
+
+        // Check for collisions with platforms
+        isOnPlatform = false;
+        scene.children.forEach((object) => {
+          if (object.type === "Mesh" && object !== ground) {
+            // Simple AABB collision detection for platforms
+            if (object.geometry.type === "BoxGeometry") {
+              const box = new THREE.Box3().setFromObject(object);
+
+              // Check if player is above the platform
+              if (
+                camera.position.x >= box.min.x &&
+                camera.position.x <= box.max.x &&
+                camera.position.z >= box.min.z &&
+                camera.position.z <= box.max.z &&
+                camera.position.y - playerHeight / 2 <= box.max.y &&
+                camera.position.y - playerHeight / 2 >= box.max.y - 0.2
+              ) {
+                camera.position.y = box.max.y + playerHeight / 2;
+                velocity.y = 0;
+                canJump = true;
+                isOnPlatform = true;
+              }
+            }
+          }
+        });
+
+        // Check if player is on the ground
+        if (camera.position.y < playerHeight && !isOnPlatform) {
+          velocity.y = 0;
+          camera.position.y = playerHeight;
+          canJump = true;
+          canDoubleJump = true;
+          document.getElementById("doubleJumpIndicator").textContent =
+            "Double Jump: Ready";
+          document.getElementById("doubleJumpIndicator").style.color = "white";
+        }
+
+        // Keep player within bounds
+        if (camera.position.x > 50) camera.position.x = 50;
+        if (camera.position.x < -50) camera.position.x = -50;
+        if (camera.position.z > 50) camera.position.z = 50;
+        if (camera.position.z < -50) camera.position.z = -50;
+
+        // Update bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          const bullet = bullets[i];
+          bullet.position.add(bullet.userData.velocity);
+          bullet.userData.lifetime--;
+
+          // Check for bullet collisions with enemies
+          for (let j = enemies.length - 1; j >= 0; j--) {
+            const enemy = enemies[j];
+            const distance = bullet.position.distanceTo(enemy.position);
+
+            const hitboxSize = enemy.userData.type === "boss" ? 2.0 : 1.2;
+
+            if (distance < hitboxSize) {
+              // Hit enemy
+              enemy.userData.health -= bullet.userData.damage;
+              scene.remove(bullet);
+              bullets.splice(i, 1);
+
+              // Update boss health bar if it's a boss
+              if (enemy.userData.type === "boss") {
+                const healthPercent =
+                  (enemy.userData.health / enemy.userData.maxHealth) * 100;
+                document.getElementById("bossHealthBar").style.width =
+                  healthPercent + "%";
+              }
+
+              if (enemy.userData.health <= 0) {
+                // Enemy defeated
+                scene.remove(enemy);
+                enemies.splice(j, 1);
+
+                if (enemy.userData.type === "boss") {
+                  score += 1000;
+                  document.getElementById(
+                    "bossHealthBarContainer"
+                  ).style.display = "none";
+                  document.getElementById("missionText").textContent =
+                    "You defeated the boss! Now find the princess in the castle!";
+                } else {
+                  score += 100;
+                }
+
+                enemiesDefeated++;
+                document.getElementById("score").textContent = score;
+                document.getElementById("enemiesDefeated").textContent =
+                  enemiesDefeated;
+              }
+
+              break;
+            }
+          }
+
+          // Remove bullets that have expired or gone too far
+          if (bullet.userData.lifetime <= 0 || bullet.position.length() > 100) {
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+          }
+        }
+
+        // Update enemies
+        enemies.forEach((enemy) => {
+          // Move towards player
+          const direction = new THREE.Vector3();
+          direction.subVectors(camera.position, enemy.position).normalize();
+
+          // Boss has special movement pattern
+          if (enemy.userData.type === "boss") {
+            // Boss moves more deliberately and sometimes jumps
+            if (Math.random() < 0.01) {
+              enemy.position.y += 1;
+            }
+
+            // Boss occasionally charges at player
+            if (Math.random() < 0.005) {
+              direction.multiplyScalar(5);
+            }
+          }
+
+          enemy.position.add(direction.multiplyScalar(enemy.userData.speed));
+
+          // Make enemy face player
+          enemy.lookAt(camera.position);
+
+          // Check for collision with player
+          const distanceToPlayer = enemy.position.distanceTo(camera.position);
+          const attackRange = enemy.userData.type === "boss" ? 3 : 2;
+          const attackCooldown =
+            enemy.userData.type === "boss"
+              ? enemy.userData.attackCooldown
+              : 1000;
+          const damage =
+            enemy.userData.type === "boss" ? enemy.userData.attackDamage : 10;
+
+          if (
+            distanceToPlayer < attackRange &&
+            time - enemy.userData.lastAttack > attackCooldown
+          ) {
+            // Enemy attacks player
+            health -= damage;
+            document.getElementById("healthFill").style.width = health + "%";
+            enemy.userData.lastAttack = time;
+
+            // Screen flash effect when taking damage
+            document.body.style.backgroundColor = "#ff0000";
+            setTimeout(() => {
+              document.body.style.backgroundColor = "";
+            }, 100);
+
+            if (health <= 0) {
+              gameActive = false;
+              controls.unlock();
+            }
+          }
+        });
+
+        // Update coins
+        for (let i = coins.length - 1; i >= 0; i--) {
+          const coin = coins[i];
+          coin.rotation.y += coin.userData.rotationSpeed;
+
+          // Check for collision with player
+          const distanceToPlayer = coin.position.distanceTo(camera.position);
+          if (distanceToPlayer < 2) {
+            // Collect coin
+            scene.remove(coin);
+            coins.splice(i, 1);
+            score += 50;
+            coinsCollected++;
+            document.getElementById("score").textContent = score;
+            document.getElementById("coins").textContent = coinsCollected;
+          }
+        }
+
+        // Update power-ups
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+          const powerUp = powerUps[i];
+
+          // Floating animation
+          powerUp.position.y =
+            powerUp.userData.originalY ||
+            powerUp.position.y +
+              Math.sin(time * 0.002 + powerUp.userData.floatOffset) * 0.1;
+
+          if (!powerUp.userData.originalY) {
+            powerUp.userData.originalY = powerUp.position.y;
+          }
+
+          powerUp.rotation.y += powerUp.userData.rotationSpeed;
+
+          // Check for collision with player
+          const distanceToPlayer = powerUp.position.distanceTo(camera.position);
+          if (distanceToPlayer < 2) {
+            // Apply power-up effect
+            switch (powerUp.userData.powerUpType) {
+              case "health":
+                health = Math.min(100, health + 25);
+                document.getElementById("healthFill").style.width =
+                  health + "%";
+                break;
+              case "ammo":
+                ammo += 30;
+                document.getElementById("ammo").textContent = ammo;
+                break;
+              case "speed":
+                // Temporary speed boost
+                movementSpeed = 15.0;
+                setTimeout(() => {
+                  movementSpeed = 10.0;
+                }, 10000); // 10 seconds
+                break;
+            }
+
+            // Remove power-up
+            scene.remove(powerUp);
+            powerUps.splice(i, 1);
+
+            // Show power-up message
+            const powerUpMessage = document.createElement("div");
+            powerUpMessage.style.position = "absolute";
+            powerUpMessage.style.top = "50%";
+            powerUpMessage.style.left = "50%";
+            powerUpMessage.style.transform = "translate(-50%, -50%)";
+            powerUpMessage.style.color = "#fff";
+            powerUpMessage.style.fontSize = "24px";
+            powerUpMessage.style.fontWeight = "bold";
+            powerUpMessage.style.textShadow = "0 0 5px #000";
+            powerUpMessage.textContent =
+              "Power-Up: " + powerUp.userData.powerUpType.toUpperCase();
+            document.body.appendChild(powerUpMessage);
+
+            setTimeout(() => {
+              document.body.removeChild(powerUpMessage);
+            }, 2000);
+          }
+        }
+
+        // Check for key collection
+        scene.children.forEach((object) => {
+          if (object.userData && object.userData.type === "key") {
+            const distanceToPlayer = object.position.distanceTo(
+              camera.position
+            );
+            if (distanceToPlayer < 2) {
+              // Collect key
+              scene.remove(object);
+              hasKey = true;
+
+              // Update mission
+              document.getElementById("missionText").textContent =
+                "You found the key! Now defeat the boss at the castle!";
+
+              // Create boss when key is collected
+              if (!bossCreated) {
+                createBossEnemy(20, 5, 20);
+                bossCreated = true;
+                document.getElementById(
+                  "bossHealthBarContainer"
+                ).style.display = "block";
+              }
+            }
+          }
+        });
+
+        // Check mission completion
+        checkMissionCompletion();
+
+        // Update minimap
+        updateMinimap();
+
+        prevTime = time;
+      }
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+        update(performance.now());
+        renderer.render(scene, camera);
+      }
+
+      // Reset game state
+      function resetGame() {
+        // Reset player
+        camera.position.set(0, 2, 0);
+        velocity.set(0, 0, 0);
+        health = 100;
+        ammo = Infinity; // Unlimited ammo
+        score = 0;
+        enemiesDefeated = 0;
+        coinsCollected = 0;
+        hasKey = false;
+        bossCreated = false;
+        movementSpeed = 10.0;
+        currentWeapon = "pistol";
+        isAutoFiring = false;
+        currentMission = 0;
+
+        // Reset missions
+        missions.forEach((mission) => {
+          mission.completed = false;
+        });
+
+        // Update UI
+        document.getElementById("healthFill").style.width = "100%";
+        document.getElementById("ammo").textContent = "∞"; // Show infinity symbol
+        document.getElementById("score").textContent = score;
+        document.getElementById("enemiesDefeated").textContent =
+          enemiesDefeated;
+        document.getElementById("coins").textContent = coinsCollected;
+        updateMissionDisplay();
+        updateWeaponDisplay();
+
+        if (document.getElementById("bossHealthBarContainer")) {
+          document.getElementById("bossHealthBarContainer").style.display =
+            "none";
+        }
+
+        // Remove all bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          scene.remove(bullets[i]);
+        }
+        bullets = [];
+
+        // Remove all enemies
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          scene.remove(enemies[i]);
+        }
+        enemies = [];
+
+        // Remove all coins
+        for (let i = coins.length - 1; i >= 0; i--) {
+          scene.remove(coins[i]);
+        }
+        coins = [];
+
+        // Remove all power-ups
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+          scene.remove(powerUps[i]);
+        }
+        powerUps = [];
+
+        // Recreate level
+        createLevel();
+
+        canDoubleJump = true;
+        document.getElementById("doubleJumpIndicator").textContent =
+          "Double Jump: Ready";
+        document.getElementById("doubleJumpIndicator").style.color = "white";
+      }
+
+      // Update minimap
+      function updateMinimap() {
+        minimapContext.clearRect(
+          0,
+          0,
+          minimapCanvas.width,
+          minimapCanvas.height
+        );
+
+        // Draw background
+        minimapContext.fillStyle = "#333";
+        minimapContext.fillRect(
+          0,
+          0,
+          minimapCanvas.width,
+          minimapCanvas.height
+        );
+
+        // Calculate minimap scale
+        const mapSize = 100; // Size of the game world to show on minimap
+        const scale = minimapCanvas.width / mapSize;
+        const centerX = minimapCanvas.width / 2;
+        const centerY = minimapCanvas.height / 2;
+
+        // Draw platforms
+        minimapContext.fillStyle = "#8B4513";
+        scene.children.forEach((object) => {
+          if (
+            object.type === "Mesh" &&
+            object !== ground &&
+            object.geometry.type === "BoxGeometry"
+          ) {
+            const x = (object.position.x - camera.position.x) * scale + centerX;
+            const y = (object.position.z - camera.position.z) * scale + centerY;
+            const width = object.geometry.parameters.width * scale;
+            const height = object.geometry.parameters.depth * scale;
+            minimapContext.fillRect(
+              x - width / 2,
+              y - height / 2,
+              width,
+              height
+            );
+          }
+        });
+
+        // Draw castle
+        minimapContext.fillStyle = "#888";
+        scene.children.forEach((object) => {
+          if (object.userData && object.userData.type === "castle") {
+            const x = (object.position.x - camera.position.x) * scale + centerX;
+            const y = (object.position.z - camera.position.z) * scale + centerY;
+            minimapContext.beginPath();
+            minimapContext.arc(x, y, 5, 0, Math.PI * 2);
+            minimapContext.fill();
+          }
+        });
+
+        // Draw enemies
+        minimapContext.fillStyle = "#f00";
+        enemies.forEach((enemy) => {
+          const x = (enemy.position.x - camera.position.x) * scale + centerX;
+          const y = (enemy.position.z - camera.position.z) * scale + centerY;
+          const size = enemy.userData.type === "boss" ? 4 : 2;
+          minimapContext.beginPath();
+          minimapContext.arc(x, y, size, 0, Math.PI * 2);
+          minimapContext.fill();
+        });
+
+        // Draw coins
+        minimapContext.fillStyle = "#ff0";
+        coins.forEach((coin) => {
+          const x = (coin.position.x - camera.position.x) * scale + centerX;
+          const y = (coin.position.z - camera.position.z) * scale + centerY;
+          minimapContext.beginPath();
+          minimapContext.arc(x, y, 1, 0, Math.PI * 2);
+          minimapContext.fill();
+        });
+
+        // Draw power-ups
+        powerUps.forEach((powerUp) => {
+          switch (powerUp.userData.powerUpType) {
+            case "health":
+              minimapContext.fillStyle = "#f00";
+              break;
+            case "ammo":
+              minimapContext.fillStyle = "#ff0";
+              break;
+            case "speed":
+              minimapContext.fillStyle = "#0f0";
+              break;
+          }
+          const x = (powerUp.position.x - camera.position.x) * scale + centerX;
+          const y = (powerUp.position.z - camera.position.z) * scale + centerY;
+          minimapContext.beginPath();
+          minimapContext.arc(x, y, 2, 0, Math.PI * 2);
+          minimapContext.fill();
+        });
+
+        // Draw player (center)
+        minimapContext.fillStyle = "#fff";
+        minimapContext.beginPath();
+        minimapContext.arc(centerX, centerY, 3, 0, Math.PI * 2);
+        minimapContext.fill();
+
+        // Draw player direction
+        minimapContext.strokeStyle = "#fff";
+        minimapContext.lineWidth = 2;
+        minimapContext.beginPath();
+        minimapContext.moveTo(centerX, centerY);
+
+        const playerDirection = new THREE.Vector3();
+        camera.getWorldDirection(playerDirection);
+        minimapContext.lineTo(
+          centerX + playerDirection.x * 10,
+          centerY + playerDirection.z * 10
+        );
+        minimapContext.stroke();
+      }
+
+      // Function to check mission completion
+      function checkMissionCompletion() {
+        if (
+          missions[currentMission].checkCompletion() &&
+          !missions[currentMission].completed
+        ) {
+          missions[currentMission].completed = true;
+
+          // Show mission complete message
+          const missionCompleteMsg = document.createElement("div");
+          missionCompleteMsg.style.position = "absolute";
+          missionCompleteMsg.style.top = "50%";
+          missionCompleteMsg.style.left = "50%";
+          missionCompleteMsg.style.transform = "translate(-50%, -50%)";
+          missionCompleteMsg.style.color = "#fff";
+          missionCompleteMsg.style.fontSize = "36px";
+          missionCompleteMsg.style.fontWeight = "bold";
+          missionCompleteMsg.style.textShadow = "0 0 10px #000";
+          missionCompleteMsg.style.textAlign = "center";
+          missionCompleteMsg.innerHTML =
+            "MISSION COMPLETE!<br>" + missions[currentMission].title;
+          document.body.appendChild(missionCompleteMsg);
+
+          // Add score for completing mission
+          score += 500;
+          document.getElementById("score").textContent = score;
+
+          // Remove message after 3 seconds
+          setTimeout(() => {
+            document.body.removeChild(missionCompleteMsg);
+
+            // Move to next mission if available
+            if (currentMission < missions.length - 1) {
+              currentMission++;
+              updateMissionDisplay();
+
+              // If it's the boss mission, create the boss
+              if (currentMission === 2 && !bossCreated) {
+                createBossEnemy(20, 5, 20);
+                bossCreated = true;
+                document.getElementById(
+                  "bossHealthBarContainer"
+                ).style.display = "block";
+              }
+            }
+          }, 3000);
+        }
+      }
+
+      // Function to update mission display
+      function updateMissionDisplay() {
+        const mission = missions[currentMission];
+        document.getElementById("missionText").textContent =
+          mission.description;
+
+        // Update objectives
+        const objectivesDiv = document.getElementById("objectives");
+        objectivesDiv.innerHTML = "";
+
+        mission.objectives.forEach((objective) => {
+          const p = document.createElement("p");
+          p.textContent = objective;
+          objectivesDiv.appendChild(p);
+        });
+      }
+
+      // Initialize the game when the page loads
+      window.onload = init;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Mario Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+        }
+        #score {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">WASD to move, SPACE to jump</div>
+    <div id="score">Coins: 0</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game variables
+        let scene, camera, renderer, mario, platforms = [], coins = [];
+        let gravity = 0.05, jumpForce = 0.5;
+        let velocity = { x: 0, y: 0, z: 0 };
+        let keysPressed = {};
+        let isJumping = false;
+        let coinCount = 0;
+        
+        // Setup the game
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+            
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+            camera.lookAt(0, 0, 0);
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            scene.add(directionalLight);
+            
+            // Create ground
+            createGround();
+            
+            // Create "Mario" character
+            createMario();
+            
+            // Create platforms
+            createPlatforms();
+            
+            // Create coins
+            createCoins();
+            
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Set up keyboard controls
+            document.addEventListener('keydown', (event) => { keysPressed[event.code] = true; });
+            document.addEventListener('keyup', (event) => { keysPressed[event.code] = false; });
+            
+            // Start game loop
+            animate();
+        }
+        
+        function createGround() {
+            const groundGeometry = new THREE.BoxGeometry(50, 1, 50);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.position.y = -0.5;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            platforms.push({
+                mesh: ground,
+                width: 50,
+                height: 1,
+                depth: 50,
+                position: { x: 0, y: -0.5, z: 0 }
+            });
+        }
+        
+        function createMario() {
+            // Mario's body
+            const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 1);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.25;
+            
+            // Mario's head
+            const headGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFA07A }); // Light salmon
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 2.25;
+            
+            // Mario's cap
+            const capGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32);
+            const capMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red
+            const cap = new THREE.Mesh(capGeometry, capMaterial);
+            cap.position.y = 2.6;
+            
+            // Create Mario group
+            mario = new THREE.Group();
+            mario.add(body);
+            mario.add(head);
+            mario.add(cap);
+            mario.position.set(0, 0, 0);
+            
+            scene.add(mario);
+        }
+        
+        function createPlatforms() {
+            // Create some floating platforms
+            const platformPositions = [
+                { x: 5, y: 2, z: -5 },
+                { x: -7, y: 3, z: -3 },
+                { x: 3, y: 4, z: 7 },
+                { x: -5, y: 5, z: 5 },
+                { x: 0, y: 6, z: -10 }
+            ];
+            
+            platformPositions.forEach(pos => {
+                const width = Math.random() * 3 + 2;
+                const height = 0.5;
+                const depth = Math.random() * 3 + 2;
+                
+                const platformGeometry = new THREE.BoxGeometry(width, height, depth);
+                const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Forest green
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.set(pos.x, pos.y, pos.z);
+                scene.add(platform);
+                
+                platforms.push({
+                    mesh: platform,
+                    width: width,
+                    height: height,
+                    depth: depth,
+                    position: { x: pos.x, y: pos.y, z: pos.z }
+                });
+            });
+        }
+        
+        function createCoins() {
+            // Create coins on platforms
+            platforms.forEach(platform => {
+                if (platform.position.y > 0) { // Don't put coins on the ground
+                    const coinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 32);
+                    const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 }); // Gold
+                    const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+                    coin.rotation.x = Math.PI / 2; // Make it flat
+                    coin.position.set(
+                        platform.position.x,
+                        platform.position.y + platform.height / 2 + 0.5,
+                        platform.position.z
+                    );
+                    scene.add(coin);
+                    
+                    coins.push({
+                        mesh: coin,
+                        position: coin.position,
+                        collected: false
+                    });
+                }
+            });
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function handleInput() {
+            // Movement
+            const speed = 0.15;
+            
+            // Reset velocity
+            velocity.x = 0;
+            velocity.z = 0;
+            
+            if (keysPressed['KeyW'] || keysPressed['ArrowUp']) {
+                velocity.z = -speed;
+            }
+            if (keysPressed['KeyS'] || keysPressed['ArrowDown']) {
+                velocity.z = speed;
+            }
+            if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) {
+                velocity.x = -speed;
+            }
+            if (keysPressed['KeyD'] || keysPressed['ArrowRight']) {
+                velocity.x = speed;
+            }
+            
+            // Jump
+            if ((keysPressed['Space']) && !isJumping) {
+                velocity.y = jumpForce;
+                isJumping = true;
+            }
+        }
+        
+        function updatePhysics() {
+            // Apply gravity
+            velocity.y -= gravity;
+            
+            // Move Mario
+            mario.position.x += velocity.x;
+            mario.position.y += velocity.y;
+            mario.position.z += velocity.z;
+            
+            // Check collision with ground and platforms
+            let onGround = false;
+            
+            platforms.forEach(platform => {
+                // Check if Mario is above the platform
+                if (mario.position.x > platform.position.x - platform.width / 2 &&
+                    mario.position.x < platform.position.x + platform.width / 2 &&
+                    mario.position.z > platform.position.z - platform.depth / 2 &&
+                    mario.position.z < platform.position.z + platform.depth / 2) {
+                    
+                    // Check if Mario is landing on the platform
+                    if (mario.position.y - 0.75 <= platform.position.y + platform.height / 2 &&
+                        mario.position.y - 0.75 > platform.position.y) {
+                        mario.position.y = platform.position.y + platform.height / 2 + 0.75;
+                        velocity.y = 0;
+                        onGround = true;
+                    }
+                }
+            });
+            
+            // Update jumping state
+            if (onGround) {
+                isJumping = false;
+            }
+            
+            // Prevent falling below ground
+            if (mario.position.y < 0.75) {
+                mario.position.y = 0.75;
+                velocity.y = 0;
+                isJumping = false;
+            }
+            
+            // Boundary limits
+            const boundary = 20;
+            if (mario.position.x < -boundary) mario.position.x = -boundary;
+            if (mario.position.x > boundary) mario.position.x = boundary;
+            if (mario.position.z < -boundary) mario.position.z = -boundary;
+            if (mario.position.z > boundary) mario.position.z = boundary;
+            
+            // Collect coins
+            coins.forEach(coin => {
+                if (!coin.collected) {
+                    // Check distance to coin
+                    const distance = Math.sqrt(
+                        Math.pow(mario.position.x - coin.position.x, 2) +
+                        Math.pow(mario.position.y - coin.position.y, 2) +
+                        Math.pow(mario.position.z - coin.position.z, 2)
+                    );
+                    
+                    if (distance < 1) {
+                        coin.collected = true;
+                        coin.mesh.visible = false;
+                        coinCount++;
+                        document.getElementById('score').innerText = 'Coins: ' + coinCount;
+                    }
+                }
+            });
+        }
+        
+        function updateCamera() {
+            // Camera follows Mario with a slight delay
+            camera.position.x = mario.position.x;
+            camera.position.z = mario.position.z + 10;
+            camera.position.y = mario.position.y + 5;
+            camera.lookAt(mario.position);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            handleInput();
+            updatePhysics();
+            updateCamera();
+            
+            // Rotate coins for visual effect
+            coins.forEach(coin => {
+                if (!coin.collected) {
+                    coin.mesh.rotation.z += 0.02;
+                }
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

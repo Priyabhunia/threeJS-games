@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Mini Militia</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #ui-container {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        pointer-events: none;
+      }
+      #health-bar {
+        width: 200px;
+        height: 20px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 5px;
+      }
+      #health-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #ff00ff;
+        transition: width 0.3s;
+      }
+      #ammo-bar {
+        width: 200px;
+        height: 10px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+      #ammo-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #0066ff;
+        transition: width 0.3s;
+      }
+      #jetpack-bar {
+        width: 200px;
+        height: 10px;
+        background-color: #333;
+        border: 2px solid #666;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 5px;
+      }
+      #jetpack-fill {
+        height: 100%;
+        width: 100%;
+        background-color: #ffcc00;
+        transition: width 0.3s;
+      }
+      #weapon-info {
+        margin-top: 10px;
+      }
+      #mobile-controls {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        pointer-events: all;
+        z-index: 10;
+      }
+      .joystick-area {
+        width: 150px;
+        height: 150px;
+        background-color: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        position: relative;
+        margin: 0 20px;
+        touch-action: none;
+      }
+      .joystick-knob {
+        width: 50px;
+        height: 50px;
+        background-color: rgba(255, 255, 255, 0.5);
+        border-radius: 50%;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        touch-action: none;
+      }
+      .action-buttons {
+        display: flex;
+        flex-direction: column;
+        margin-right: 20px;
+      }
+      .action-button {
+        width: 60px;
+        height: 60px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        margin: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        touch-action: none;
+      }
+      #loading-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        z-index: 100;
+      }
+      #loading-bar {
+        width: 300px;
+        height: 20px;
+        background-color: #333;
+        border-radius: 10px;
+        margin-top: 20px;
+        overflow: hidden;
+      }
+      #loading-progress {
+        height: 100%;
+        width: 0%;
+        background-color: #ff00ff;
+        transition: width 0.3s;
+      }
+      #loading-message {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #aaa;
+      }
+      #error-message {
+        color: #ff6666;
+        margin-top: 10px;
+        display: none;
+      }
+      #start-button {
+        margin-top: 20px;
+        padding: 15px 30px;
+        background-color: #ff00ff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 20px;
+        display: block;
+      }
+      #start-button:hover {
+        background-color: #cc00cc;
+      }
+      #debug-info {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        max-width: 300px;
+        z-index: 50;
+      }
+      #player-list {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 14px;
+        min-width: 200px;
+        z-index: 40;
+      }
+      .player-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+      }
+      .player-name {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .player-score {
+        font-weight: bold;
+      }
+      .team-blue {
+        color: #0066ff;
+      }
+      .team-red {
+        color: #ff3333;
+      }
+      #game-message {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        font-size: 24px;
+        text-align: center;
+        display: none;
+        z-index: 60;
+      }
+      #weapon-selector {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 20px;
+        padding: 5px;
+        z-index: 20;
+      }
+      .weapon-option {
+        width: 50px;
+        height: 50px;
+        margin: 0 5px;
+        background-color: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .weapon-option.active {
+        background-color: rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-screen">
+      <h1>3D Mini Militia</h1>
+      <p>Loading game assets...</p>
+      <div id="loading-bar">
+        <div id="loading-progress"></div>
+      </div>
+      <div id="loading-message">Initializing game engine...</div>
+      <div id="error-message"></div>
+      <button id="start-button">START GAME</button>
+    </div>
+
+    <div id="ui-container">
+      <div id="health-bar">
+        <div id="health-fill"></div>
+      </div>
+      <div id="ammo-bar">
+        <div id="ammo-fill"></div>
+      </div>
+      <div id="jetpack-bar">
+        <div id="jetpack-fill"></div>
+      </div>
+      <div id="weapon-info">Assault Rifle: 30/90</div>
+    </div>
+
+    <div id="debug-info">
+      Status: Waiting to start<br />
+      Controls: Not initialized
+    </div>
+
+    <div id="player-list">
+      <h3>Players</h3>
+      <div id="player-list-items"></div>
+    </div>
+
+    <div id="game-message"></div>
+
+    <div id="weapon-selector">
+      <div class="weapon-option active" data-weapon="rifle">R</div>
+      <div class="weapon-option" data-weapon="shotgun">S</div>
+      <div class="weapon-option" data-weapon="sniper">N</div>
+      <div class="weapon-option" data-weapon="pistol">P</div>
+    </div>
+
+    <div id="mobile-controls">
+      <div class="joystick-area" id="move-joystick">
+        <div class="joystick-knob"></div>
+      </div>
+      <div class="action-buttons">
+        <div class="action-button" id="jump-button">JUMP</div>
+        <div class="action-button" id="fire-button">FIRE</div>
+        <div class="action-button" id="reload-button">RELOAD</div>
+      </div>
+      <div class="joystick-area" id="look-joystick">
+        <div class="joystick-knob"></div>
+      </div>
+    </div>
+
+    <!-- Direct script includes -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
+
+    <script>
+      // Global variables
+      let scene, camera, renderer, controls;
+      let gameStarted = false;
+      let loadingComplete = false;
+      let debugInfo = document.getElementById("debug-info");
+      let players = {};
+      let localPlayerId = null;
+      let socket = null;
+      let currentMap = null;
+      let weapons = {};
+      let bullets = [];
+      let lastTime = 0;
+      let deltaTime = 0;
+      let playerTeam = "blue"; // or "red"
+      let gameState = "waiting"; // waiting, playing, ended
+      let respawnTime = 3; // seconds
+      let respawnCountdown = 0;
+      let jetpackFuel = 100;
+      let jetpackActive = false;
+      let jetpackRechargeRate = 15; // per second
+      let jetpackConsumptionRate = 30; // per second
+      let gravity = new THREE.Vector3(0, -20, 0);
+      let playerVelocity = new THREE.Vector3();
+      let playerOnGround = false;
+      let jumpVelocity = 10;
+      let moveSpeed = 10;
+
+      // Debug function
+      function updateDebug(message) {
+        if (debugInfo) {
+          debugInfo.innerHTML += "<br>" + message;
+          // Keep only last 10 messages
+          const lines = debugInfo.innerHTML.split("<br>");
+          if (lines.length > 10) {
+            debugInfo.innerHTML = lines.slice(lines.length - 10).join("<br>");
+          }
+        }
+        console.log("[DEBUG] " + message);
+      }
+
+      // Function to start the game
+      function startGame() {
+        if (gameStarted) return;
+        gameStarted = true;
+
+        try {
+          updateDebug("Starting game...");
+
+          // Hide loading screen
+          document.getElementById("loading-screen").style.display = "none";
+
+          // Show debug info
+          if (debugInfo) debugInfo.style.display = "block";
+
+          // Initialize the game
+          initGame();
+        } catch (error) {
+          updateDebug("Error starting game: " + error.message);
+          showError("Failed to start game: " + error.message);
+        }
+      }
+
+      // Function to show error
+      function showError(message) {
+        const errorElement = document.getElementById("error-message");
+        if (errorElement) {
+          errorElement.style.display = "block";
+          errorElement.textContent = message;
+        }
+
+        // Show loading screen with error
+        document.getElementById("loading-screen").style.display = "flex";
+      }
+
+      // Initialize the game
+      function initGame() {
+        updateDebug("Initializing game...");
+
+        // Create scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        scene.fog = new THREE.Fog(0x87ceeb, 50, 150);
+
+        // Create camera
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.set(0, 5, 0);
+
+        // Create renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Create controls
+        controls = new THREE.PointerLockControls(camera, document.body);
+        scene.add(controls.getObject());
+
+        // Add event listener for pointer lock changes
+        document.addEventListener("click", function () {
